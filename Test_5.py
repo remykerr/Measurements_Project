@@ -10,6 +10,8 @@ import pandas as pd
 from scipy.signal import butter, filtfilt
 from scipy.stats import kurtosis, skew
 
+v_ref = 3
+
 Full_df = pd.DataFrame({})
 
 for i in range (1,8) :
@@ -107,13 +109,13 @@ for i in range (1,8) :
     print(Merged.head())
     
     # Add normalized metrics vith repesct to speed
-    Merged["Norm_az_avg"]  = Merged["az_avg"]  / Merged["v"]
-    Merged["Norm_az_rms"]  = Merged["az_rms"]  / Merged["v"]
-    Merged["Norm_az_std"]  = Merged["az_std"]  / Merged["v"]
-    Merged["Norm_az_peak"] = Merged["az_peak"] / Merged["v"]
-    Merged["Norm_az_kurt"] = Merged['az_kurt'] / Merged["v"]
-    Merged["Norm_az_crest"] = Merged['az_crest'] / Merged["v"]
-    Merged["Norm_az_skew"] = Merged['az_skew'] / Merged["v"]
+    Merged["Norm_az_avg"]  = Merged["az_avg"]  / np.sqrt (v_ref/Merged["v"])
+    Merged["Norm_az_rms"]  = Merged["az_rms"]  / np.sqrt (v_ref/Merged["v"])
+    Merged["Norm_az_std"]  = Merged["az_std"]  / np.sqrt (v_ref/Merged["v"])
+    Merged["Norm_az_peak"] = Merged["az_peak"] / np.sqrt (v_ref/Merged["v"])
+    Merged["Norm_az_kurt"] = Merged['az_kurt'] / np.sqrt (v_ref/Merged["v"])
+    Merged["Norm_az_crest"] = Merged['az_crest'] / np.sqrt (v_ref/Merged["v"])
+    Merged["Norm_az_skew"] = Merged['az_skew'] / np.sqrt (v_ref/Merged["v"])
     
     #adding final result to full data frame
     Full_df = pd.concat([Full_df,Merged])
