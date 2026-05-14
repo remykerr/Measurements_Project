@@ -8,8 +8,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
-Accel_file = "Accelerometer_5.csv"
-GPS_file = "Location_5.csv"
+x = 5
+Accel_file = f"Measurements/Accelerometer_{x}.csv"
+GPS_file = f"Measurements/Location_{x}.csv"
 
 Phone_angle = 35 * (np.pi/180)
 
@@ -33,13 +34,13 @@ True_z_accel_data = (np.cos(Phone_angle)*Accel_data["Z (m/s^2)"] + np.sin(Phone_
 Accel_z = pd.concat([Accel_data["Time (s)"],True_z_accel_data], axis=1)
 Accel_z.columns = ['t', "az"]
 
-plt.figure()
-plt.plot(GPS_data["Time (s)"], GPS_data["Velocity (m/s)"], label='Recorded GPS')
-plt.xlabel('Time [s]')
-plt.ylabel('V [m/s]')
-plt.title('Recorded Speed Over Time')
-plt.legend()
-plt.show()
+# plt.figure()
+# plt.plot(GPS_data["Time (s)"], GPS_data["Velocity (m/s)"], label='Recorded GPS')
+# plt.xlabel('Time [s]')
+# plt.ylabel('V [m/s]')
+# plt.title('Recorded Speed Over Time')
+# plt.legend()
+# plt.show()
 
 GPS = pd.concat([GPS_data["Time (s)"],GPS_data["Latitude (°)"],GPS_data["Longitude (°)"],GPS_data["Velocity (m/s)"]], axis=1)
 GPS.columns = ['t', "lat", "long", "v"]
