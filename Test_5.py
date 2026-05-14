@@ -7,6 +7,8 @@ Created on Wed May 13 15:15:37 2026
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+from scipy.signal import butter, filtfilt
+from scipy.stats import kurtosis, skew
 
 Full_df = pd.DataFrame({})
 
@@ -21,6 +23,17 @@ for i in range (1,8) :
     
     #Since phone was at an angle on the bike, we recreate the z component using trig and we substract gravity g = 9.81
     True_z_accel_data = (np.cos(Phone_angle)*Accel_data["Z (m/s^2)"] + np.sin(Phone_angle)*Accel_data["Y (m/s^2)"])-9.81 
+    
+    #Applying a High Pass filter with cutoff at 0.5hz to remove drift and slow tilt change from measurments
+    
+
+    def hp_filter(signal, fs=100.0, fc=0.5, order=4):
+        b, a = butter(order, fc / (fs/2.0), btype='high')
+        return filtfilt(b, a, signal)   # filtfilt = zero-phase, no distortion
+    
+    True_z_accel_data = hp_filter(True_z_accel_data)
+    True_z_accel_data = pd.DataFrame(True_z_accel_data)
+
     
     # plt.figure()
     # plt.plot(Accel_data["Time (s)"], True_z_accel_data, label='Recorded Acceleration')
@@ -54,17 +67,34 @@ for i in range (1,8) :
     Accel_z = Accel_z.set_index('t')
     
     # Compute signal metrics on a 1s window which also downsamples accelerometer data to 1 Hz 
+    def rms(x):
+        return np.sqrt(np.mean(x**2))
+    def kurt(x):
+        return kurtosis(x)
+    def crest(x):
+        return abs(max(x))/rms(x + 1e-12)
+    def skew_(x):
+        return skew(x)
+    
+    
     Accel_avg = Accel_z.resample('1s').mean()
-    Accel_rms = Accel_z.resample("1s").apply(lambda x: np.sqrt(np.mean(x**2)))
+    Accel_rms = Accel_z.resample("1s").apply(rms)
     Accel_std = Accel_z.resample('1s').std()
-    Accel_peak = (Accel_z.resample('1s').max())
+    Accel_peak = Accel_z.resample('1s').max()
+    Accel_kurt = Accel_z.resample('1s').apply(kurt)
+    Accel_crest = Accel_z.resample('1s').apply(crest)
+    Accel_skew = Accel_z.resample('1s').apply(skew_)
+    
     
     Accel_avg.columns  = ['az_avg']
     Accel_rms.columns  = ['az_rms']
     Accel_std.columns  = ['az_std']
     Accel_peak.columns = ['az_peak']
+    Accel_kurt.columns = ['az_kurt']
+    Accel_crest.columns = ['az_crest']
+    Accel_skew.columns = ['az_skew']
     
-    Accel_metrics = pd.concat([Accel_avg, Accel_rms, Accel_std, Accel_peak],axis=1)
+    Accel_metrics = pd.concat([Accel_avg, Accel_rms, Accel_std, Accel_peak, Accel_kurt, Accel_crest, Accel_skew ],axis=1)
     
     #merging Gps data with accelerometer metrics with repect to timestamp
     Merged = pd.merge_asof(
@@ -81,6 +111,9 @@ for i in range (1,8) :
     Merged["Norm_az_rms"]  = Merged["az_rms"]  / Merged["v"]
     Merged["Norm_az_std"]  = Merged["az_std"]  / Merged["v"]
     Merged["Norm_az_peak"] = Merged["az_peak"] / Merged["v"]
+    Merged["Norm_az_kurt"] = Merged['az_kurt'] / Merged["v"]
+    Merged["Norm_az_crest"] = Merged['az_crest'] / Merged["v"]
+    Merged["Norm_az_skew"] = Merged['az_skew'] / Merged["v"]
     
     #adding final result to full data frame
     Full_df = pd.concat([Full_df,Merged])
