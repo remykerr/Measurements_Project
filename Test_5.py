@@ -67,14 +67,26 @@ Accel_rms.columns  = ['az_rms']
 Accel_std.columns  = ['az_std']
 Accel_peak.columns = ['az_peak']
 
-
 Accel_metrics = pd.concat([Accel_avg, Accel_rms, Accel_std, Accel_peak],axis=1)
 
 #merging Gps data with accelerometer metrics with repect to timestamp
 Merged = pd.merge_asof(
     GPS.sort_values('t'),Accel_metrics.reset_index().sort_values('t'), on='t')
 
+#Filtering out zones where speed is to low
+# Remove very low speeds
+Merged = Merged[Merged["v"] > 1]
+
 print(Merged.head())
+
+# Add normalized metrics directly
+Merged["Norm_az_avg"]  = Merged["az_avg"]  / Merged["v"]
+Merged["Norm_az_rms"]  = Merged["az_rms"]  / Merged["v"]
+Merged["Norm_az_std"]  = Merged["az_std"]  / Merged["v"]
+Merged["Norm_az_peak"] = Merged["az_peak"] / Merged["v"]
+
+
+
 
 plt.figure(figsize=(10,8))
 
