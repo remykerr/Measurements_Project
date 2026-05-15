@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.signal import butter, filtfilt
 from scipy.stats import kurtosis, skew
+import folium
+from branca.colormap import LinearColormap
 
 v_ref = 3
 
@@ -149,4 +151,41 @@ plt.title('GPS Position Colored by Vertical Acceleration')
 plt.axis('equal')
 
 plt.show()
+
+
+#Create a folium map centered around the mean location of the data points
+lat_med = Full_df["lat"].mean()
+lon_med = Full_df["long"].mean()
+complete_map = folium.Map(location=[lat_med, lon_med], zoom_start=15, tiles='OpenStreetMap')
+
+# Define a colormap for the RMS values to visually differentiate areas of different vibration intensity
+# We use a linear colormap that goes from green (low RMS) to red (high RMS), with yellow in the middle. 
+# The vmin and vmax parameters are set to the minimum and maximum of the normalized RMS values to ensure that the colors are scaled appropriately.
+colormap = LinearColormap(
+    colors=['green', 'yellow', 'red'],
+    vmin=Full_df["Norm_az_rms"].min(),
+    vmax=Full_df["Norm_az_rms"].max()
+)
+colormap.add_to(complete_map) # Add the legend to the map
+
+# We iterate through the data points and add a CircleMarker for each location, colored according to the normalized RMS value.
+for i in range(len(Full_df)):
+    line = Full_df.iloc[i]
+    rms_norm = Full_df["Norm_az_rms"].iloc[i]
+    
+    folium.CircleMarker(
+        location=[line["lat"], line["long"]],
+        radius=4,
+        color=colormap(rms_norm),
+        fill=True,
+        fill_opacity=0.7,
+        # Data displayed when clicking on the point
+        popup=(f"Time: {line['t']}\n"
+               f"RMS: {line['Norm_az_rms']:.2f} m/s²\n"
+               f"Velocity: {line['v']:.1f} m/s")
+    ).add_to(complete_map)
+
+# Save the map as an HTML file that can be opened in a web browser. 
+# This file will contain the interactive map with all the markers and the legend.
+complete_map.save("Full_Detailed_Rugosity_Map_Milan.html")
 
