@@ -14,6 +14,8 @@ from branca.colormap import LinearColormap
 
 v_ref = 3
 
+fsamp = 100.5
+
 Full_df = pd.DataFrame({})
 
 for i in range (1,8) :
@@ -70,6 +72,83 @@ for i in range (1,8) :
     # Set index
     Accel_z = Accel_z.set_index('t')
     
+    
+    
+        
+    # ===============================
+    # FFT / PSD ANALYSIS
+    # ===============================
+    
+    window_size = int(fsamp)
+    
+    segments = []
+    segment_times = []
+    
+    signal = Accel_z["az"].values
+    for k in range(0, len(signal)-window_size, window_size):
+    
+        seg = signal[k:k+window_size]
+    
+        segments.append(seg)
+    
+        segment_times.append(
+            Accel_z.index[k]
+        )
+    
+    segments = np.array(segments)
+    N = window_size
+    window = np.hanning(N)
+    segments_windowed = segments * window
+    
+
+    # FFT
+    dft = np.fft.rfft(segments, axis=1) / N
+
+    # Frequency vector
+    freq = np.fft.rfftfreq(N, d=1/fsamp)
+    
+    # Power spectrum
+    ps = np.abs(dft)**2
+    
+    # One-sided correction
+    if N % 2 == 0:
+        ps[:,1:-1] *= 2
+    else:
+        ps[:,1:] *= 2
+    df = fsamp / N
+
+    psd = ps / df
+    spec_energy = np.sum(psd, axis=1)
+    band1 = (freq >= 3) & (freq <= 10)
+    comfort_energy = np.sum(psd[:, band1],axis=1)
+    band2 = (freq >= 10) & (freq <= 20)
+    texture_energy = np.sum(psd[:, band2],axis=1)
+    dominant_freq = freq[np.argmax(psd, axis=1)]
+    
+    FFT_metrics = pd.DataFrame({
+    't': segment_times,
+    'spec_energy': spec_energy,
+    'comfort_energy': comfort_energy,
+    'texture_energy': texture_energy,
+    'dominant_freq': dominant_freq
+})
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     # Compute signal metrics on a 1s window which also downsamples accelerometer data to 1 Hz 
     def rms(x):
         return np.sqrt(np.mean(x**2))
@@ -104,11 +183,6 @@ for i in range (1,8) :
     Merged = pd.merge_asof(
         GPS.sort_values('t'),Accel_metrics.reset_index().sort_values('t'), on='t')
     
-    #Filtering out zones where speed is to low
-    # Remove very low speeds
-    Merged = Merged[Merged["v"] > 1]
-    
-    print(Merged.head())
     
     # Add normalized metrics vith repesct to speed
     Merged["Norm_az_avg"]  = Merged["az_avg"]  / np.sqrt (v_ref/Merged["v"])
@@ -119,6 +193,13 @@ for i in range (1,8) :
     Merged["Norm_az_crest"] = Merged['az_crest'] / np.sqrt (v_ref/Merged["v"])
     Merged["Norm_az_skew"] = Merged['az_skew'] / np.sqrt (v_ref/Merged["v"])
     
+    #Merging FFt data and accel data
+    Merged = pd.merge_asof(Merged.sort_values('t'),FFT_metrics.sort_values('t'), on='t')
+    
+    
+    #Filtering out zones where speed is to low
+    # Remove very low speeds
+    Merged = Merged[Merged["v"] > 1]
     #adding final result to full data frame
     Full_df = pd.concat([Full_df,Merged])
     
