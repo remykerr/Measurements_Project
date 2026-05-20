@@ -207,7 +207,7 @@ for surface in surface_types :
         surface_data[surface] = pd.concat([surface_data[surface], Merged],ignore_index=True)
 
 data_set = pd.concat([surface_data["cobble"],surface_data["Rough_asphalt"],surface_data["Smooth_asphalt"]],ignore_index=True)
-data_set = data_set.iloc[:, 4:]
+data_set = data_set.iloc[:, 11:]
 
 # Features / labels
 X = data_set.drop(columns=["srf"])
@@ -310,3 +310,46 @@ print(metrics.confusion_matrix(Y_test,y_pred_knn))
 # Detailed report
 print("\nClassification Report :")
 print(metrics.classification_report(Y_test,y_pred_knn))
+
+#We see that SVM is better suited to our data than KNN
+
+# =====================================================
+# FEATURE IMPORTANCE ANALYSIS
+# =====================================================
+
+from sklearn.ensemble import RandomForestClassifier
+
+# Create classifier
+RF_Classifier = RandomForestClassifier(n_estimators=200,random_state=42)
+
+# Train
+RF_Classifier.fit(X_train_norm,Y_train)
+
+# Feature importance
+importance = RF_Classifier.feature_importances_
+
+# Create dataframe
+feature_importance = pd.DataFrame({"Feature": X.columns,"Importance": importance})
+
+# Sort
+feature_importance = feature_importance.sort_values(by="Importance",ascending=False)
+
+print("\n===== FEATURE IMPORTANCE =====")
+print(feature_importance)
+
+# Plot
+plt.figure(figsize=(10,6))
+
+plt.barh(feature_importance["Feature"],feature_importance["Importance"])
+
+plt.xlabel("Importance")
+plt.ylabel("Feature")
+
+plt.title("Feature Importance - Random Forest")
+
+plt.gca().invert_yaxis()
+
+plt.grid(True)
+
+plt.show()
+
