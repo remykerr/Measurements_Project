@@ -144,8 +144,6 @@ for surface in surface_types :
         # Fine texture / harshness band
         band2 = (freq >= 10) & (freq <= 20)
         texture_energy = np.sum(psd[:, band2], axis=1)
-        # Dominant frequency
-        dominant_freq = freq[np.argmax(psd, axis=1)]
         
         # ===============================
         # PERIODICITY ANALYSIS
@@ -181,7 +179,6 @@ for surface in surface_types :
             'spec_energy': spec_energy,
             'comfort_energy': comfort_energy,
             'texture_energy': texture_energy,
-            'dominant_freq': dominant_freq,
         
             # Periodicity metrics
             'periodicity_strength': periodicity_strengths,
@@ -191,32 +188,17 @@ for surface in surface_types :
         # Compute signal metrics on a 1s window which also downsamples accelerometer data to 1 Hz 
         def rms(x):
             return np.sqrt(np.mean(x**2))
-        def kurt(x):
-            return kurtosis(x)
-        def crest(x):
-            return abs(max(x))/rms(x + 1e-12)
-        def skew_(x):
-            return skew(x)
         
-        
-        Accel_avg = Accel_z.resample('1s').mean()
         Accel_rms = Accel_z.resample("1s").apply(rms)
         Accel_std = Accel_z.resample('1s').std()
         Accel_peak = Accel_z.resample('1s').max()
-        Accel_kurt = Accel_z.resample('1s').apply(kurt)
-        Accel_crest = Accel_z.resample('1s').apply(crest)
-        Accel_skew = Accel_z.resample('1s').apply(skew_)
         
         
-        Accel_avg.columns  = ['az_avg']
         Accel_rms.columns  = ['az_rms']
         Accel_std.columns  = ['az_std']
         Accel_peak.columns = ['az_peak']
-        Accel_kurt.columns = ['az_kurt']
-        Accel_crest.columns = ['az_crest']
-        Accel_skew.columns = ['az_skew']
         
-        Accel_metrics = pd.concat([Accel_avg, Accel_rms, Accel_std, Accel_peak, Accel_kurt, Accel_crest, Accel_skew ],axis=1)
+        Accel_metrics = pd.concat([Accel_rms, Accel_std, Accel_peak],axis=1)
         
         #merging Gps data with accelerometer metrics with repect to timestamp
         Merged = pd.merge_asof(
@@ -224,13 +206,9 @@ for surface in surface_types :
         
         
         # Add normalized metrics vith repesct to speed
-        Merged["Norm_az_avg"]  = Merged["az_avg"]  / np.sqrt (v_ref/Merged["v"])
         Merged["Norm_az_rms"]  = Merged["az_rms"]  / np.sqrt (v_ref/Merged["v"])
         Merged["Norm_az_std"]  = Merged["az_std"]  / np.sqrt (v_ref/Merged["v"])
         Merged["Norm_az_peak"] = Merged["az_peak"] / np.sqrt (v_ref/Merged["v"])
-        Merged["Norm_az_kurt"] = Merged['az_kurt'] / np.sqrt (v_ref/Merged["v"])
-        Merged["Norm_az_crest"] = Merged['az_crest'] / np.sqrt (v_ref/Merged["v"])
-        Merged["Norm_az_skew"] = Merged['az_skew'] / np.sqrt (v_ref/Merged["v"])
         
         #Merging FFt data and accel data
         Merged = pd.merge_asof(Merged.sort_values('t'),FFT_metrics.sort_values('t'), on='t')
@@ -249,7 +227,7 @@ for surface in surface_types :
 
 data_set = pd.concat([surface_data["cobble"],surface_data["Rough_asphalt"],surface_data["Smooth_asphalt"]],ignore_index=True)
 #keep only data we want to use as attributs
-data_set = data_set.iloc[:, 11:]
+data_set = data_set.iloc[:, 7:]
 
 # Features / labels
 X = data_set.drop(columns=["srf"])
@@ -258,7 +236,7 @@ Y = data_set["srf"]
 # Train/test split
 from sklearn.model_selection import train_test_split
 
-X_train, X_test, Y_train, Y_test = train_test_split(X,Y,test_size=0.3,random_state=41,stratify=Y)
+X_train, X_test, Y_train, Y_test = train_test_split(X,Y,test_size=0.3,random_state=40,stratify=Y)
 
 # Scaling
 from sklearn.preprocessing import StandardScaler
