@@ -91,7 +91,7 @@ for surface in surface_types :
         Accel_z = Accel_z.set_index('t')
         
         # ===============================
-        # FFT / PSD ANALYSIS
+        # FFT / PSD + PERIODICITY ANALYSIS
         # ===============================
         
         window_size = int(fsamp)
@@ -100,52 +100,118 @@ for surface in surface_types :
         segment_times = []
         
         signal = Accel_z["az"].values
+        
         for k in range(0, len(signal)-window_size, window_size):
-        
             seg = signal[k:k+window_size]
-        
             segments.append(seg)
-        
-            segment_times.append(
-                Accel_z.index[k]
-            )
-        
+            segment_times.append(Accel_z.index[k])
         segments = np.array(segments)
+        
         N = window_size
+        
+        # Apply Hanning window
         window = np.hanning(N)
         segments_windowed = segments * window
         
-    
+        # ===============================
         # FFT
-        dft = np.fft.rfft(segments, axis=1) / N
-    
+        # ===============================
+        dft = np.fft.rfft(segments_windowed, axis=1) / N
         # Frequency vector
         freq = np.fft.rfftfreq(N, d=1/fsamp)
         
-        # Power spectrum
+        # ===============================
+        # POWER SPECTRUM
+        # ===============================
         ps = np.abs(dft)**2
-        
         # One-sided correction
         if N % 2 == 0:
             ps[:,1:-1] *= 2
         else:
             ps[:,1:] *= 2
         df = fsamp / N
-    
+        # Power Spectral Density
         psd = ps / df
+        
+        # ===============================
+        # PSD FEATURES
+        # ===============================
+        # Total spectral energy
         spec_energy = np.sum(psd, axis=1)
+        # Human comfort band (ISO-sensitive region)
         band1 = (freq >= 3) & (freq <= 10)
-        comfort_energy = np.sum(psd[:, band1],axis=1)
+        comfort_energy = np.sum(psd[:, band1], axis=1)
+        # Fine texture / harshness band
         band2 = (freq >= 10) & (freq <= 20)
-        texture_energy = np.sum(psd[:, band2],axis=1)
+        texture_energy = np.sum(psd[:, band2], axis=1)
+        # Dominant frequency
         dominant_freq = freq[np.argmax(psd, axis=1)]
         
+        # ===============================
+        # PERIODICITY ANALYSIS
+        # ===============================
+        
+        periodicity_strengths = []
+        dominant_periods = []
+        for seg in segments:
+            # Remove mean
+            seg_centered = seg - np.mean(seg)
+            # Autocorrelation
+            acf = np.correlate(seg_centered,seg_centered,mode='full')
+            # Keep positive lags only
+            acf = acf[len(acf)//2:]
+            # Normalize
+            acf = acf / np.max(acf)
+            # Remove zero-lag peak
+            acf_no0 = acf[1:]
+            # Periodicity strength
+            periodicity_strength = np.max(acf_no0)
+            # Dominant lag
+            dominant_lag = np.argmax(acf_no0) + 1
+            # Convert lag to seconds
+            dominant_period = dominant_lag / fsamp
+            periodicity_strengths.append(periodicity_strength)
+            dominant_periods.append(dominant_period)
+
+
+        # ===============================
+        # OPTIONAL ADVANCED FEATURES
+        # ===============================
+        # Spectral entropy
+        spectral_entropy = []
+        for p in psd:
+            p_norm = p / np.sum(p)
+            entropy = -np.sum(p_norm * np.log2(p_norm + 1e-12))
+            spectral_entropy.append(entropy)
+        
+        # Spectral flatness
+        spectral_flatness = []
+        for p in psd:
+            flatness = (np.exp(np.mean(np.log(p + 1e-12)))/np.mean(p))
+            spectral_flatness.append(flatness)
+            
+        # ===============================
+        # FINAL FFT FEATURE DATAFRAME
+        # ===============================
+        
         FFT_metrics = pd.DataFrame({
-        't': segment_times,
-        'spec_energy': spec_energy,
-        'comfort_energy': comfort_energy,
-        'texture_energy': texture_energy,
-        'dominant_freq': dominant_freq })
+        
+            't': segment_times,
+        
+            # PSD metrics
+            'spec_energy': spec_energy,
+            'comfort_energy': comfort_energy,
+            'texture_energy': texture_energy,
+            'dominant_freq': dominant_freq,
+        
+            # Periodicity metrics
+            'periodicity_strength': periodicity_strengths,
+            'dominant_period': dominant_periods,
+        
+            # Spectral shape metrics
+            'spectral_entropy': spectral_entropy,
+            'spectral_flatness': spectral_flatness
+        })
         
         # Compute signal metrics on a 1s window which also downsamples accelerometer data to 1 Hz 
         def rms(x):
