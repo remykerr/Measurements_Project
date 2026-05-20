@@ -11,7 +11,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.signal import butter, filtfilt
-from scipy.stats import kurtosis, skew
 
 
 v_ref = 2.5
