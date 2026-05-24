@@ -226,13 +226,11 @@ for surface in surface_types :
         
         
         # Add normalized metrics vith repesct to speed
-        Merged["Norm_az_avg"]  = Merged["az_avg"]  / np.sqrt (v_ref/Merged["v"])
-        Merged["Norm_az_rms"]  = Merged["az_rms"]  / np.sqrt (v_ref/Merged["v"])
-        Merged["Norm_az_std"]  = Merged["az_std"]  / np.sqrt (v_ref/Merged["v"])
-        Merged["Norm_az_peak"] = Merged["az_peak"] / np.sqrt (v_ref/Merged["v"])
-        Merged["Norm_az_kurt"] = Merged['az_kurt'] / np.sqrt (v_ref/Merged["v"])
-        Merged["Norm_az_crest"] = Merged['az_crest'] / np.sqrt (v_ref/Merged["v"])
-        Merged["Norm_az_skew"] = Merged['az_skew'] / np.sqrt (v_ref/Merged["v"])
+        Merged["az_avg"]  = Merged["az_avg"]  / np.sqrt (v_ref/Merged["v"])
+        Merged["az_rms"]  = Merged["az_rms"]  / np.sqrt (v_ref/Merged["v"])
+        Merged["az_std"]  = Merged["az_std"]  / np.sqrt (v_ref/Merged["v"])
+        Merged["az_peak"] = Merged["az_peak"] / np.sqrt (v_ref/Merged["v"])
+
         
         #Merging FFt data and accel data
         Merged = pd.merge_asof(Merged.sort_values('t'),FFT_metrics.sort_values('t'), on='t')
@@ -254,8 +252,8 @@ for surface in surface_types :
 data_set = pd.concat([surface_data["cobble"],surface_data["Rough_asphalt"],surface_data["Smooth_asphalt"]],ignore_index=True)
 test_data = pd.concat([test_data["cobble"],test_data["Rough_asphalt"],test_data["Smooth_asphalt"]],ignore_index=True)
 #keep only data we want to use as attributs
-data_set = data_set.iloc[:, 11:]
-test_data = test_data.iloc[:, 11:]
+data_set = data_set.iloc[:, 4:]
+test_data = test_data.iloc[:, 4:]
 
 # ==================================
 # SHUFFLE TRAIN DATA
