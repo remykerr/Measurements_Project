@@ -10,8 +10,6 @@ import pandas as pd
 from scipy.signal import butter, filtfilt
 import folium
 
-v_ref = 3
-
 fsamp = 100.5
 
 # ==========================================
@@ -180,8 +178,9 @@ for i in range (1,8) :
     
 
 
-
-
+ # ==========================================
+ # Plotting
+ # ==========================================
 plt.figure(figsize=(10,8))
 
 plt.scatter(
