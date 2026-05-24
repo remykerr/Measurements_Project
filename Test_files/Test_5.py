@@ -183,8 +183,12 @@ for i in range (1,8) :
     Merged = pd.merge_asof(
         GPS.sort_values('t'),Accel_metrics.reset_index().sort_values('t'), on='t')
     
+    #Filtering out zones where speed is to low
+    # Remove very low speeds
+    Merged = Merged[Merged["v"] > 1]
     
     # Add normalized metrics vith repesct to speed
+    #v_ref = np.mean(Merged["v"])
     Merged["Norm_az_avg"]  = Merged["az_avg"]  / np.sqrt (v_ref/Merged["v"])
     Merged["Norm_az_rms"]  = Merged["az_rms"]  / np.sqrt (v_ref/Merged["v"])
     Merged["Norm_az_std"]  = Merged["az_std"]  / np.sqrt (v_ref/Merged["v"])
@@ -192,14 +196,8 @@ for i in range (1,8) :
     Merged["Norm_az_kurt"] = Merged['az_kurt'] / np.sqrt (v_ref/Merged["v"])
     Merged["Norm_az_crest"] = Merged['az_crest'] / np.sqrt (v_ref/Merged["v"])
     Merged["Norm_az_skew"] = Merged['az_skew'] / np.sqrt (v_ref/Merged["v"])
-    
     #Merging FFt data and accel data
     Merged = pd.merge_asof(Merged.sort_values('t'),FFT_metrics.sort_values('t'), on='t')
-    
-    
-    #Filtering out zones where speed is to low
-    # Remove very low speeds
-    Merged = Merged[Merged["v"] > 1]
     #adding final result to full data frame
     Full_df = pd.concat([Full_df,Merged])
     

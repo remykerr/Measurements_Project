@@ -33,10 +33,12 @@ fsamp = 100.5
 
 surface_data = {}        
 surface_types = ["cobble","Rough_asphalt","Smooth_asphalt"]
+test_data = {}
 
 
 for surface in surface_types :
     surface_data[surface] = pd.DataFrame({})
+    test_data[surface] = pd.DataFrame({})
     for i in range (1,8) :
         Accel_file = f"Clean_measurements_ML/{surface}_{i}/Accelerometer.csv"
         GPS_file = f"Clean_measurements_ML/{surface}_{i}/Location.csv"
@@ -243,33 +245,47 @@ for surface in surface_types :
         
         #added the classifier 
         Merged["srf"] = surface
-        
-        #adding final result to full data frame
-        surface_data[surface] = pd.concat([surface_data[surface], Merged],ignore_index=True)
+        if i < 7 :
+            #adding final result to full data frame
+            surface_data[surface] = pd.concat([surface_data[surface], Merged],ignore_index=True)
+        else :
+            test_data[surface] = pd.concat([test_data[surface], Merged],ignore_index=True)
 
 data_set = pd.concat([surface_data["cobble"],surface_data["Rough_asphalt"],surface_data["Smooth_asphalt"]],ignore_index=True)
+test_data = pd.concat([test_data["cobble"],test_data["Rough_asphalt"],test_data["Smooth_asphalt"]],ignore_index=True)
 #keep only data we want to use as attributs
 data_set = data_set.iloc[:, 11:]
+test_data = test_data.iloc[:, 11:]
 
-# Features / labels
+# ==================================
+# SHUFFLE TRAIN DATA
+# ==================================
+
+data_set = data_set.sample(frac=1,random_state=42).reset_index(drop=True)
+
+# ==================================
+# FEATURES / LABELS
+# ==================================
+
 X = data_set.drop(columns=["srf"])
 Y = data_set["srf"]
 
-# Train/test split
-from sklearn.model_selection import train_test_split
+X_test = test_data.drop(columns=["srf"])
+Y_test = test_data["srf"]
 
-X_train, X_test, Y_train, Y_test = train_test_split(X,Y,test_size=0.3,random_state=41,stratify=Y)
+# ==================================
+# SCALING
+# ==================================
 
-# Scaling
 from sklearn.preprocessing import StandardScaler
 
 scaler = StandardScaler()
 
-X_train_norm = scaler.fit_transform(X_train)
+X_train_norm = scaler.fit_transform(X)
+
 X_test_norm = scaler.transform(X_test)
 
-
-
+Y_train = Y
 ### MACHINE LEARNING ###
 from sklearn import svm, neighbors, metrics
 
