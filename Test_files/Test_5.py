@@ -7,20 +7,23 @@ Created on Wed May 13 15:15:37 2026
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+from pathlib import Path
 from scipy.signal import butter, filtfilt
 from scipy.stats import kurtosis, skew
 import folium
 from branca.colormap import LinearColormap
 
-v_ref = 3
+BASE_DIR = Path(__file__).resolve().parent
 
-fsamp = 100.5
+v_ref = 3 # reference speed for normalization (3 m/s ~ 10.8 km/h)
+
+fsamp = 100.5 # sampling frequency of the accelerometer data
 
 Full_df = pd.DataFrame({})
 
 for i in range (1,8) :
-    Accel_file = f"Measurements/Accelerometer_{i}.csv"
-    GPS_file = f"Measurements/Location_{i}.csv"
+    Accel_file = BASE_DIR / "Measurements" / f"Accelerometer_{i}.csv"
+    GPS_file = BASE_DIR / "Measurements" / f"Location_{i}.csv"
     
     Phone_angle = 35 * (np.pi/180)
     
@@ -32,7 +35,6 @@ for i in range (1,8) :
     
     #Applying a High Pass filter with cutoff at 0.5hz to remove drift and slow tilt change from measurments
     
-
     def hp_filter(signal, fs=100.0, fc=0.5, order=4):
         b, a = butter(order, fc / (fs/2.0), btype='high')
         return filtfilt(b, a, signal)   # filtfilt = zero-phase, no distortion
@@ -72,13 +74,14 @@ for i in range (1,8) :
     # Set index
     Accel_z = Accel_z.set_index('t')
     
-    
+    #?
     
         
     # ===============================
     # FFT / PSD ANALYSIS
     # ===============================
     
+    # Creating 1s segments from the raw signal
     window_size = int(fsamp)
     
     segments = []
@@ -97,11 +100,13 @@ for i in range (1,8) :
     
     segments = np.array(segments)
     N = window_size
+    
+    # appling hanning window to reduce spectral leakage
     window = np.hanning(N)
     segments_windowed = segments * window
     
 
-    # FFT
+    # FFT (on segment window of on segments windows????)
     dft = np.fft.rfft(segments, axis=1) / N
 
     # Frequency vector
@@ -200,7 +205,7 @@ for i in range (1,8) :
     Merged = pd.merge_asof(Merged.sort_values('t'),FFT_metrics.sort_values('t'), on='t')
     #adding final result to full data frame
     Full_df = pd.concat([Full_df,Merged])
-    
+    Full_df
 
 
 
@@ -266,5 +271,5 @@ for i in range(len(Full_df)):
 
 # Save the map as an HTML file that can be opened in a web browser. 
 # This file will contain the interactive map with all the markers and the legend.
-complete_map.save("Full_Detailed_Rugosity_Map_Milan.html")
+complete_map.save(BASE_DIR / "Full_Detailed_Rugosity_Map_Milan.html")
 
