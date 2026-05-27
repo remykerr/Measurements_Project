@@ -9,6 +9,18 @@ from scipy.stats import kurtosis, skew
 from gravity_correction import correct_gravity
 
 BASE_DIR = Path(__file__).resolve().parent
+DEBUG_OUTPUT_KEYS = (
+    "sampling_frequency",
+    "raw_acceleration",
+    "vertical_no_g",
+    "vertical_no_g_highpass",
+    "frequency",
+    "dft",
+    "power_spectrum",
+    "psd",
+    "merged_before_speed_filter",
+    "merged_after_speed_filter",
+)
 
 
 def discover_measurement_ids(clean_measurements_dir, surface):
@@ -46,14 +58,18 @@ def estimate_sampling_frequency(time_values):
 
 def build_surface_dataset(
     base_dir=BASE_DIR,
-    surface_types=("cobble", "Rough_asphalt", "Smooth_asphalt", "Grass", "Unpaved"), 
+    surface_types=("cobble", "Rough_asphalt", "Smooth_asphalt", "Grass", "Unpaved", "Speedbump"), 
     train_measurements=None,
     test_measurements=(4,),
     v_ref=2.5,
     fsamp=None,
     stationary_seconds=3.0,
     min_speed=1.0,
-    plot_debug_raw_signal=True,
+    plot_debug=False,
+    return_debug=False,
+    debug_surface=None,
+    debug_measurement=None,
+    debug_window_index=0,
 ):
     """
     Build the machine-learning dataset from accelerometer and GPS measurements.
@@ -66,11 +82,16 @@ def build_surface_dataset(
     By default, train_measurements=None means: use every available measurement
     except the IDs listed in test_measurements. Both returned DataFrames contain
     only model-ready feature columns plus the target column "srf".
+
+    If return_debug=True, the function returns (train_df, test_df, debug_data).
+    Use debug_surface/debug_measurement to collect diagnostics for a specific
+    measurement without storing debug data for the whole dataset.
     """
     base_dir = Path(base_dir)
     clean_measurements_dir = base_dir / "Clean_measurements_ML"
     surface_data = {}        
     test_data = {}
+    debug_data = {}
     test_measurements = set(test_measurements)
     requested_train_measurements = (
         None if train_measurements is None else set(train_measurements)
@@ -88,6 +109,19 @@ def build_surface_dataset(
         measurement_ids = sorted(train_measurements_for_surface | test_measurements)
 
         for i in measurement_ids :
+            collect_debug = (
+                plot_debug
+                or return_debug
+                or debug_surface is not None
+                or debug_measurement is not None
+            )
+            collect_debug = collect_debug and (
+                debug_surface is None or surface == debug_surface
+            )
+            collect_debug = collect_debug and (
+                debug_measurement is None or i == debug_measurement
+            )
+
             measure_dir = clean_measurements_dir / f"{surface}_{i}"
             Accel_file = measure_dir / "Accelerometer.csv"
             GPS_file = measure_dir / "Location.csv"
@@ -107,12 +141,13 @@ def build_surface_dataset(
                 expected_g=9.81,
             )
             True_z_accel_data = Accel_corrected["a_vertical_no_g"]
+            True_z_accel_data_raw = True_z_accel_data.copy()
             current_fsamp = (
                 estimate_sampling_frequency(Accel_data["Time (s)"])
                 if fsamp is None
                 else fsamp
             )
-            if plot_debug_raw_signal:
+            if collect_debug:
                 print(f"{surface}_{i}: sampling frequency = {current_fsamp:.2f} Hz")
             
             #Applying a High Pass filter with cutoff at 0.5hz to remove drift and slow tilt change from measurments
@@ -125,12 +160,13 @@ def build_surface_dataset(
             True_z_accel_data = pd.DataFrame(True_z_accel_data)
         
             
-            if plot_debug_raw_signal:
+            if plot_debug and collect_debug:
                 plt.figure()
-                plt.plot(Accel_data["Time (s)"], True_z_accel_data, label='Recorded Acceleration')
+                plt.plot(Accel_data["Time (s)"], True_z_accel_data_raw, label='Vertical no g')
+                plt.plot(Accel_data["Time (s)"], True_z_accel_data, label='High-pass vertical no g')
                 plt.xlabel('Time [s]')
                 plt.ylabel('Acc [m/s^2]')
-                plt.title('Recorded Acceleration Over Time')
+                plt.title(f'{surface}_{i} acceleration correction')
                 plt.legend()
                 plt.show()
             
@@ -201,6 +237,51 @@ def build_surface_dataset(
             df = current_fsamp / N
             # Power Spectral Density
             psd = ps / df
+
+            if collect_debug and len(segments) > 0:
+                debug_window_index_safe = int(
+                    np.clip(debug_window_index, 0, len(segments) - 1)
+                )
+                debug_key = f"{surface}_{i}"
+                debug_data[debug_key] = {
+                    "surface": surface,
+                    "measurement_id": i,
+                    "sampling_frequency": current_fsamp,
+                    "raw_acceleration": Accel_data.copy(),
+                    "vertical_no_g": pd.Series(
+                        True_z_accel_data_raw,
+                        name="a_vertical_no_g",
+                    ),
+                    "vertical_no_g_highpass": pd.Series(
+                        True_z_accel_data.iloc[:, 0].to_numpy(),
+                        name="a_vertical_no_g_highpass",
+                    ),
+                    "window_size": window_size,
+                    "segment_times": segment_times,
+                    "debug_window_index": debug_window_index_safe,
+                    "debug_segment": segments[debug_window_index_safe].copy(),
+                    "frequency": freq.copy(),
+                    "dft": dft[debug_window_index_safe].copy(),
+                    "power_spectrum": ps[debug_window_index_safe].copy(),
+                    "psd": psd[debug_window_index_safe].copy(),
+                }
+
+                if plot_debug:
+                    plt.figure()
+                    plt.plot(freq, np.abs(dft[debug_window_index_safe]))
+                    plt.xlabel("Frequency [Hz]")
+                    plt.ylabel("DFT amplitude")
+                    plt.title(f"{debug_key} DFT window {debug_window_index_safe}")
+                    plt.grid(True)
+                    plt.show()
+
+                    plt.figure()
+                    plt.plot(freq, psd[debug_window_index_safe])
+                    plt.xlabel("Frequency [Hz]")
+                    plt.ylabel("PSD")
+                    plt.title(f"{debug_key} PSD window {debug_window_index_safe}")
+                    plt.grid(True)
+                    plt.show()
             
             # ===============================
             # PSD FEATURES
@@ -304,11 +385,16 @@ def build_surface_dataset(
             #Merging FFt data and accel data
             Merged = pd.merge_asof(Merged.sort_values('t'),FFT_metrics.sort_values('t'), on='t')
             
+            if collect_debug and f"{surface}_{i}" in debug_data:
+                debug_data[f"{surface}_{i}"]["merged_before_speed_filter"] = Merged.copy()
             
             #Filtering out zones where speed is to low
             # Remove very low speeds < 1 m/s
             Merged = Merged[Merged["v"] > min_speed]
             # Merged = Merged[Merged["t"] > pd.to_timedelta(5, unit='s')]
+
+            if collect_debug and f"{surface}_{i}" in debug_data:
+                debug_data[f"{surface}_{i}"]["merged_after_speed_filter"] = Merged.copy()
             
             #added the classifier 
             Merged["srf"] = surface
@@ -336,6 +422,9 @@ def build_surface_dataset(
 
     data_set = data_set.sample(frac=1,random_state=42).reset_index(drop=True)
     test_data = test_data.reset_index(drop=True)
+
+    if return_debug:
+        return data_set, test_data, debug_data
 
     return data_set, test_data
     
