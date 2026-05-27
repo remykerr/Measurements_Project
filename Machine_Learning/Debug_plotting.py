@@ -11,7 +11,7 @@ Parameters:
 from Dataset_construction import build_surface_dataset
 
 
-DEBUG_SURFACE = "Speedbump"
+DEBUG_SURFACE = "Grass"
 DEBUG_MEASUREMENT = 4
 DEBUG_WINDOW_INDEX = 1
 
