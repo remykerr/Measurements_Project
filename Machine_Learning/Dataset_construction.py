@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import re
+import matplotlib.pyplot as plt
 import warnings
 from pathlib import Path
 from scipy.signal import butter, filtfilt
@@ -97,6 +98,9 @@ def build_surface_dataset(
             )
             True_z_accel_data = Accel_corrected["a_vertical_no_g"]
             
+            
+            # checking the sampling frequency of the accelerometer data
+            
             #Applying a High Pass filter with cutoff at 0.5hz to remove drift and slow tilt change from measurments
         
             def hp_filter(signal, fs=100.0, fc=0.5, order=4):
@@ -107,13 +111,13 @@ def build_surface_dataset(
             True_z_accel_data = pd.DataFrame(True_z_accel_data)
         
             
-            # plt.figure()
-            # plt.plot(Accel_data["Time (s)"], True_z_accel_data, label='Recorded Acceleration')
-            # plt.xlabel('Time [s]')
-            # plt.ylabel('Acc [m/s^2]')
-            # plt.title('Recorded Acceleration Over Time')
-            # plt.legend()
-            # plt.show()
+            plt.figure()
+            plt.plot(Accel_data["Time (s)"], True_z_accel_data, label='Recorded Acceleration')
+            plt.xlabel('Time [s]')
+            plt.ylabel('Acc [m/s^2]')
+            plt.title('Recorded Acceleration Over Time')
+            plt.legend()
+            plt.show()
             
             Accel_z = pd.concat([Accel_data["Time (s)"],True_z_accel_data], axis=1)
             Accel_z.columns = ['t', "az"]
@@ -287,7 +291,7 @@ def build_surface_dataset(
             
             
             #Filtering out zones where speed is to low
-            # Remove very low speeds
+            # Remove very low speeds < 1 m/s
             Merged = Merged[Merged["v"] > min_speed]
             # Merged = Merged[Merged["t"] > pd.to_timedelta(5, unit='s')]
             
