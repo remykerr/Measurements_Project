@@ -135,11 +135,13 @@ def build_surface_dataset(
             
             # Estimate the gravity direction from the initial stationary samples
             # and project the signal on the real vertical axis with g removed.
-            Accel_corrected, _ = correct_gravity(
+            Accel_corrected, gravity_info = correct_gravity(
                 Accel_data,
                 stationary_seconds=stationary_seconds,
                 expected_g=9.81,
             )
+            accel_axes = Accel_data[["X (m/s^2)", "Y (m/s^2)", "Z (m/s^2)"]].to_numpy()
+            raw_vertical_with_g = accel_axes @ gravity_info["vertical_unit_vector"]
             True_z_accel_data = Accel_corrected["a_vertical_no_g"]
             True_z_accel_data_raw = True_z_accel_data.copy()
             current_fsamp = (
@@ -162,11 +164,26 @@ def build_surface_dataset(
             
             if plot_debug and collect_debug:
                 plt.figure()
+                plt.plot(Accel_data["Time (s)"], raw_vertical_with_g, label='Raw vertical with g')
+                plt.xlabel('Time [s]')
+                plt.ylabel('Acc [m/s^2]')
+                plt.title(f'{surface}_{i} raw vertical acceleration with g')
+                plt.legend()
+                plt.show()
+
+                plt.figure()
                 plt.plot(Accel_data["Time (s)"], True_z_accel_data_raw, label='Vertical no g')
+                plt.xlabel('Time [s]')
+                plt.ylabel('Acc [m/s^2]')
+                plt.title(f'{surface}_{i} vertical acceleration without g')
+                plt.legend()
+                plt.show()
+
+                plt.figure()
                 plt.plot(Accel_data["Time (s)"], True_z_accel_data, label='High-pass vertical no g')
                 plt.xlabel('Time [s]')
                 plt.ylabel('Acc [m/s^2]')
-                plt.title(f'{surface}_{i} acceleration correction')
+                plt.title(f'{surface}_{i} vertical acceleration after high-pass filter')
                 plt.legend()
                 plt.show()
             
@@ -248,6 +265,10 @@ def build_surface_dataset(
                     "measurement_id": i,
                     "sampling_frequency": current_fsamp,
                     "raw_acceleration": Accel_data.copy(),
+                    "raw_vertical_with_g": pd.Series(
+                        raw_vertical_with_g,
+                        name="raw_vertical_with_g",
+                    ),
                     "vertical_no_g": pd.Series(
                         True_z_accel_data_raw,
                         name="a_vertical_no_g",
