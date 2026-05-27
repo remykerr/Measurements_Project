@@ -16,6 +16,10 @@ from ML_utils import evaluate_model
 
 train_df, test_df = build_surface_dataset() 
 
+# sanity check of dimensions
+print("train_df shape:", train_df.shape)
+print("test_df shape:", test_df.shape)
+
 # ==================================
 # FEATURES / LABELS
 # ==================================
