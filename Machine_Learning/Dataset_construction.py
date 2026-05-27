@@ -1,10 +1,24 @@
 import numpy as np
 import pandas as pd
+import warnings
 from pathlib import Path
 from scipy.signal import butter, filtfilt
 from scipy.stats import kurtosis, skew
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+def find_column(data, exact_name=None, prefix=None):
+    if exact_name in data.columns:
+        return exact_name
+    if prefix is not None:
+        prefix = prefix.lower()
+        for column in data.columns:
+            if column.strip().lower().startswith(prefix):
+                return column
+    available = ", ".join(data.columns)
+    expected = exact_name or f"a column starting with {prefix}"
+    raise KeyError(f"Expected {expected}. Available columns: {available}")
 
 
 def build_surface_dataset(
@@ -15,6 +29,7 @@ def build_surface_dataset(
     v_ref=2.5,
     fsamp=100.5,
     phone_angle_deg=42,
+    skip_missing_measurements=True,
 ):
     """
     Build the machine-learning dataset from accelerometer and GPS measurements.
@@ -28,6 +43,10 @@ def build_surface_dataset(
     DataFrame, while measurements listed in test_measurements are returned in the
     test DataFrame. Both returned DataFrames contain only model-ready feature
     columns plus the target column "srf".
+
+    If skip_missing_measurements is True, missing measurement folders are skipped
+    with a warning. This allows adding a new surface class before all measurement
+    IDs exist for that class.
     """
     base_dir = Path(base_dir)
     surface_data = {}        
@@ -41,6 +60,19 @@ def build_surface_dataset(
             measure_dir = base_dir / "Clean_measurements_ML" / f"{surface}_{i}"
             Accel_file = measure_dir / "Accelerometer.csv"
             GPS_file = measure_dir / "Location.csv"
+
+            if not Accel_file.exists() or not GPS_file.exists():
+                if skip_missing_measurements:
+                    warnings.warn(f"Skipping missing measurement: {measure_dir}")
+                    continue
+                missing_files = [
+                    str(file_path)
+                    for file_path in (Accel_file, GPS_file)
+                    if not file_path.exists()
+                ]
+                raise FileNotFoundError(
+                    "Missing measurement files: " + ", ".join(missing_files)
+                )
             
             Phone_angle = phone_angle_deg * (np.pi/180)
             
@@ -79,7 +111,9 @@ def build_surface_dataset(
             # plt.legend()
             # plt.show()
             
-            GPS = pd.concat([GPS_data["Time (s)"],GPS_data["Latitude (°)"],GPS_data["Longitude (°)"],GPS_data["Velocity (m/s)"]], axis=1)
+            latitude_col = find_column(GPS_data, prefix="latitude")
+            longitude_col = find_column(GPS_data, prefix="longitude")
+            GPS = pd.concat([GPS_data["Time (s)"],GPS_data[latitude_col],GPS_data[longitude_col],GPS_data["Velocity (m/s)"]], axis=1)
             GPS.columns = ['t', "lat", "long", "v"]
             
             #Different and Unstable sampling frequency (100,5hz for accel, 1hz for GPS) -> use pandas time resampling to connect the two data sets 
@@ -250,8 +284,16 @@ def build_surface_dataset(
             elif i in test_measurements :
                 test_data[surface] = pd.concat([test_data[surface], Merged],ignore_index=True)
 
-    data_set = pd.concat([surface_data["cobble"],surface_data["Rough_asphalt"],surface_data["Smooth_asphalt"]],ignore_index=True)
-    test_data = pd.concat([test_data["cobble"],test_data["Rough_asphalt"],test_data["Smooth_asphalt"]],ignore_index=True)
+    train_frames = [
+        frame for frame in surface_data.values()
+        if not frame.empty
+    ]
+    test_frames = [
+        frame for frame in test_data.values()
+        if not frame.empty
+    ]
+    data_set = pd.concat(train_frames, ignore_index=True) if train_frames else pd.DataFrame({})
+    test_data = pd.concat(test_frames, ignore_index=True) if test_frames else pd.DataFrame({})
     #keep only data we want to use as attributs
     data_set = data_set.iloc[:, 11:]
     test_data = test_data.iloc[:, 11:]
