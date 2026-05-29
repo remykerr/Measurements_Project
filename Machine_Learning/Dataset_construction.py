@@ -58,13 +58,14 @@ def estimate_sampling_frequency(time_values):
 
 def build_surface_dataset(
     base_dir=BASE_DIR,
-    surface_types=("cobble", "Rough_asphalt", "Smooth_asphalt", "Grass", "Unpaved", "Speedbump"), 
+    surface_types=("cobble", "Rough_asphalt", "Smooth_asphalt", "Grass", "Unpaved", "Speedbump", "Pothole"), 
     train_measurements=None,
     test_measurements=(4,),
     v_ref=2.5,
     fsamp=None,
     stationary_seconds=3.0,
     min_speed=1.0,
+    plot_debug_acc = False,
     plot_debug=False,
     return_debug=False,
     debug_surface=None,
@@ -133,6 +134,16 @@ def build_surface_dataset(
             Accel_data = pd.read_csv(Accel_file)
             GPS_data = pd.read_csv(GPS_file)
             
+            
+            if plot_debug_acc is True and collect_debug:
+                plt.figure()
+                plt.plot(Accel_data["Time (s)"], Accel_data["Z (m/s^2)"], label='Vertical Acceleration (g_included)')
+                plt.xlabel('Time [s]')
+                plt.ylabel('Acc [m/s^2]')
+                plt.title(f'{surface}_{i} raw vertical acceleration (g included)')
+                plt.legend()
+                plt.show()
+            
             # Estimate the gravity direction from the initial stationary samples
             # and project the signal on the real vertical axis with g removed.
             Accel_corrected, _ = correct_gravity(
@@ -162,33 +173,35 @@ def build_surface_dataset(
             
             if plot_debug and collect_debug:
                 plt.figure()
-                plt.plot(Accel_data["Time (s)"], True_z_accel_data_raw, label='Vertical no g')
-                #plt.plot(Accel_data["Time (s)"], True_z_accel_data, label='High-pass vertical no g')
-                plt.xlabel('Time [s]')
-                plt.ylabel('Acc [m/s^2]')
-                plt.title(f'{surface}_{i} acceleration correction')
-                plt.legend()
-                plt.show()
-                
-                plt.figure()
-                #plt.plot(Accel_data["Time (s)"], True_z_accel_data_raw, label='Vertical no g')
-                plt.plot(Accel_data["Time (s)"], True_z_accel_data, label='High-pass vertical no g')
-                plt.xlabel('Time [s]')
-                plt.ylabel('Acc [m/s^2]')
-                plt.title(f'{surface}_{i} acceleration after high-pass filter')
-                plt.legend()
-                plt.show()
-                
-                plt.figure()
-                plt.plot(Accel_data["Time (s)"], Accel_data["Z (m/s^2)"], label='raw_vertical')
-                plt.xlabel('Time [s]')
-                plt.ylabel('Acc [m/s^2]')
-                plt.title(f'{surface}_{i} acceleration after high-pass filter')
-                plt.legend()
-                plt.show()
 
+                plt.plot(
+                    Accel_data["Time (s)"],
+                    True_z_accel_data_raw,
+                    label="Vertical Acceleration (g removed)"
+                )
+
+                plt.plot(
+                    Accel_data["Time (s)"],
+                    Accel_data["Z (m/s^2)"],
+                    label="Vertical Acceleration (g included)"
+                )
+
+                plt.xlabel("Time [s]")
+                plt.ylabel("Acc [m/s^2]")
+                plt.title(f"{surface}_{i} vertical acceleration comparison")
+                plt.legend()
+                plt.grid(True)
+                plt.show()
                 
-            
+                plt.figure()
+                plt.plot(Accel_data["Time (s)"], True_z_accel_data, label='Vertical Acceleration (g removed + high-pass)')
+                plt.xlabel('Time [s]')
+                plt.ylabel('Acc [m/s^2]')
+                plt.title(f'{surface}_{i} Vertical Acceleration (g removed + high-pass)')
+                plt.legend()
+                plt.show()
+                
+        
             Accel_z = pd.concat([Accel_data["Time (s)"],True_z_accel_data], axis=1)
             Accel_z.columns = ['t', "az"]
             
@@ -297,7 +310,7 @@ def build_surface_dataset(
                     plt.figure()
                     plt.plot(freq, psd[debug_window_index_safe])
                     plt.xlabel("Frequency [Hz]")
-                    plt.ylabel("PSD")
+                    plt.ylabel("PSD [m^2/s^4/Hz]")
                     plt.title(f"{debug_key} PSD window {debug_window_index_safe}")
                     plt.grid(True)
                     plt.show()
@@ -306,7 +319,8 @@ def build_surface_dataset(
             # PSD FEATURES
             # ===============================
             # Total spectral energy
-            spec_energy = np.sum(psd, axis=1)
+            band0 = (freq >= 0.5) & (freq <= 50)  # the band is 0.5 - 50 (minimum nyquist frequency across all measurements) (remy fsamp = 100 hz)
+            spec_energy = np.sum(psd[:, band0], axis=1) 
             # Human comfort band (ISO-sensitive region)
             band1 = (freq >= 3) & (freq <= 10)
             comfort_energy = np.sum(psd[:, band1], axis=1)
