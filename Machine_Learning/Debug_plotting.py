@@ -18,6 +18,7 @@ DEBUG_WINDOW_INDEX = 1
 train_df, test_df, debug_data = build_surface_dataset(
     plot_debug=True,
     return_debug=True,
+    plot_debug_acc = True,
     debug_surface=DEBUG_SURFACE,
     debug_measurement=DEBUG_MEASUREMENT,
     debug_window_index=DEBUG_WINDOW_INDEX,
