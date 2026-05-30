@@ -182,6 +182,39 @@ for i in range (1,8) :
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 plt.figure(figsize=(10,8))
 
 plt.scatter(
