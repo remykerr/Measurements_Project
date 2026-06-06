@@ -117,7 +117,7 @@ def build_surface_dataset(
                 or debug_measurement is not None
             )
             collect_debug = collect_debug and (
-                debug_surface is None or surface == debug_surface
+                debug_surface is None or surface.lower() == debug_surface.lower()
             )
             collect_debug = collect_debug and (
                 debug_measurement is None or i == debug_measurement
@@ -406,14 +406,14 @@ def build_surface_dataset(
                 GPS.sort_values('t'),Accel_metrics.reset_index().sort_values('t'), on='t')
             
             
-            # Add normalized metrics vith repesct to speed
-            Merged["Norm_az_avg"]  = Merged["az_avg"]  / np.sqrt (v_ref/Merged["v"])
-            Merged["Norm_az_rms"]  = Merged["az_rms"]  / np.sqrt (v_ref/Merged["v"])
-            Merged["Norm_az_std"]  = Merged["az_std"]  / np.sqrt (v_ref/Merged["v"])
-            Merged["Norm_az_peak"] = Merged["az_peak"] / np.sqrt (v_ref/Merged["v"])
-            Merged["Norm_az_kurt"] = Merged['az_kurt'] / np.sqrt (v_ref/Merged["v"])
-            Merged["Norm_az_crest"] = Merged['az_crest'] / np.sqrt (v_ref/Merged["v"])
-            Merged["Norm_az_skew"] = Merged['az_skew'] / np.sqrt (v_ref/Merged["v"])
+            # Add normalized metrics vith repesct to speed (There was an error the normalization was accel * sqrt(v/v_ref))
+            Merged["Norm_az_avg"]  = Merged["az_avg"]  * np.sqrt (v_ref/Merged["v"])
+            Merged["Norm_az_rms"]  = Merged["az_rms"]  * np.sqrt (v_ref/Merged["v"])
+            Merged["Norm_az_std"]  = Merged["az_std"]  * np.sqrt (v_ref/Merged["v"])
+            Merged["Norm_az_peak"] = Merged["az_peak"] * np.sqrt (v_ref/Merged["v"])
+            Merged["Norm_az_kurt"] = Merged['az_kurt'] * np.sqrt (v_ref/Merged["v"])
+            Merged["Norm_az_crest"] = Merged['az_crest'] * np.sqrt (v_ref/Merged["v"])
+            Merged["Norm_az_skew"] = Merged['az_skew'] * np.sqrt (v_ref/Merged["v"])
             
             #Merging FFt data and accel data
             Merged = pd.merge_asof(Merged.sort_values('t'),FFT_metrics.sort_values('t'), on='t')
