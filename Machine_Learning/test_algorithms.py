@@ -6,12 +6,19 @@ scales the features, and calls the shared evaluation utility for each selected
 machine-learning model.
 """
 
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn import neighbors, svm
 from sklearn.preprocessing import StandardScaler
 
 from Dataset_construction import build_surface_dataset
 from ML_utils import evaluate_model
+
+
+OUTPUT_DIR = Path(__file__).resolve().parent / "model_results"
 
 
 train_df, test_df, _ = build_surface_dataset() 
@@ -56,4 +63,13 @@ evaluate_model(
     "KNN Classifier",
 )
 
-plt.show()
+OUTPUT_DIR.mkdir(exist_ok=True)
+for figure_number in plt.get_fignums():
+    figure = plt.figure(figure_number)
+    figure.savefig(
+        OUTPUT_DIR / f"confusion_matrix_{figure_number}.png",
+        dpi=150,
+        bbox_inches="tight",
+    )
+
+print(f"\nConfusion matrix figures saved to: {OUTPUT_DIR}")

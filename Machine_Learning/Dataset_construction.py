@@ -58,7 +58,7 @@ def estimate_sampling_frequency(time_values):
 
 def build_surface_dataset(
     base_dir=BASE_DIR,
-    surface_types=("cobble", "Rough_asphalt", "Smooth_asphalt", "Grass", "Unpaved", "Speedbump", "Pothole"), 
+    surface_types=("cobble", "Rough_asphalt", "Smooth_asphalt", "Grass", "Unpaved"),#, "Speedbump", "Pothole"), 
     train_measurements=None,
     test_measurements=(4,),
     v_ref=2.5,
