@@ -14,7 +14,7 @@ from Dataset_construction import build_surface_dataset
 from ML_utils import evaluate_model
 
 
-train_df, test_df = build_surface_dataset() 
+train_df, test_df, _ = build_surface_dataset() 
 
 # sanity check of dimensions
 print("train_df shape:", train_df.shape)
