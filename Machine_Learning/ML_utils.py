@@ -46,15 +46,16 @@ def evaluate_model(model, X_train, y_train, X_test, y_test, model_name):
     print("\nConfusion Matrix :")
     print(metrics.confusion_matrix(y_test, y_pred))
 
-    ### Confusion matrix visualization
+    ### TTest Confusion matrix visualization
     np.set_printoptions(precision=2)
 
     # Plot non-normalized confusion matrix
     titles_options = [
-        (f"Confusion matrix | {model_name}", None),
-        (f"Normalized confusion matrix | {model_name}", "true"),
+        (f"Confusion matrix |Test Set| {model_name}", None),
+        (f"Normalized confusion matrix |Test Set| {model_name}", "true"),
     ]
     for title, normalize in titles_options:
+        _, ax = plt.subplots(figsize=(8, 6))
         disp = ConfusionMatrixDisplay.from_estimator(
             model,
             X_test,
@@ -62,8 +63,41 @@ def evaluate_model(model, X_train, y_train, X_test, y_test, model_name):
             display_labels=model.classes_,
             cmap=plt.cm.Blues,
             normalize=normalize,
+            ax=ax,
         )
         disp.ax_.set_title(title)
+        disp.ax_.tick_params(axis="x", labelrotation=30)
+
+        for label in disp.ax_.get_xticklabels():
+            label.set_horizontalalignment("right")
+
+        print(title)
+        print(disp.confusion_matrix)
+        
+    ### Train Confusion matrix visualization
+    np.set_printoptions(precision=2)
+
+    # Plot non-normalized confusion matrix
+    titles_options = [
+        (f"Confusion matrix |Train Set| {model_name}", None),
+        (f"Normalized confusion matrix |Train Set| {model_name}", "true"),
+    ]
+    for title, normalize in titles_options:
+        _, ax = plt.subplots(figsize=(8, 6))
+        disp = ConfusionMatrixDisplay.from_estimator(
+            model,
+            X_train,
+            y_train,
+            display_labels=model.classes_,
+            cmap=plt.cm.Blues,
+            normalize=normalize,
+            ax=ax,
+        )
+        disp.ax_.set_title(title)
+        disp.ax_.tick_params(axis="x", labelrotation=30)
+
+        for label in disp.ax_.get_xticklabels():
+            label.set_horizontalalignment("right")
 
         print(title)
         print(disp.confusion_matrix)

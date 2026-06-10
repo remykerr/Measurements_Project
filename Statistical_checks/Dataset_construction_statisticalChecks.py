@@ -6,9 +6,16 @@ import warnings
 from pathlib import Path
 from scipy.signal import butter, filtfilt
 from scipy.stats import kurtosis, skew
+import sys
+
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+MACHINE_LEARNING_DIR = PROJECT_DIR / "Machine_Learning"
+if str(MACHINE_LEARNING_DIR) not in sys.path:
+    sys.path.insert(0, str(MACHINE_LEARNING_DIR))
+
 from gravity_correction import correct_gravity
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = MACHINE_LEARNING_DIR
 DEBUG_OUTPUT_KEYS = (
     "sampling_frequency",
     "raw_acceleration",
@@ -56,9 +63,9 @@ def estimate_sampling_frequency(time_values):
     return 1.0 / np.median(time_steps)
 
 
-def build_surface_dataset(
+def build_surface_dataset_2(
     base_dir=BASE_DIR,
-    surface_types=("cobble", "Rough_asphalt", "Smooth_asphalt", "Grass", "Unpaved"),#, "Speedbump", "Pothole"), 
+    surface_types=("cobble", "Rough_asphalt", "Smooth_asphalt", "Grass", "Unpaved"), #, "Speedbump", "Pothole"), # "Speedbump" and "Pothole" are not relevant for statistical checks as they are very short events, not continuous surfaces
     train_measurements=None,
     test_measurements=(4,),
     v_ref=2.5,
@@ -245,6 +252,36 @@ def build_surface_dataset(
                 segments.append(seg)
                 segment_times.append(Accel_z.index[k])
             segments = np.array(segments)
+
+            # Weak-stationarity check support: compare the normalized
+            # autocorrelation shape of each 1 s window against the average one.
+            max_lag_seconds = 0.3
+            max_lag = int(max_lag_seconds * current_fsamp)
+            acf_windows = []
+
+            for seg in segments:
+                seg_centered = seg - np.mean(seg)
+                acf = np.correlate(seg_centered, seg_centered, mode="full")
+                acf = acf[len(acf)//2:]
+
+                if acf[0] != 0:
+                    acf = acf / acf[0]
+                else:
+                    acf = np.zeros_like(acf)
+
+                acf_windows.append(acf[:max_lag + 1])
+
+            acf_windows = np.array(acf_windows)
+            acf_reference = np.mean(acf_windows, axis=0)
+            acf_reference_norm = np.linalg.norm(acf_reference)
+
+            if acf_reference_norm != 0:
+                acf_errors = (
+                    np.linalg.norm(acf_windows - acf_reference, axis=1)
+                    / acf_reference_norm
+                )
+            else:
+                acf_errors = np.zeros(len(acf_windows))
             
             N = window_size
             
@@ -370,6 +407,10 @@ def build_surface_dataset(
             
                 # Periodicity metrics
                 'periodicity_strength': periodicity_strengths,
+
+                # Weak-stationarity autocorrelation metrics
+                'acf_error': acf_errors,
+                'acf_stationary': acf_errors < 1,
             
             })
             
@@ -431,7 +472,7 @@ def build_surface_dataset(
             if collect_debug and f"{surface}_{i}" in debug_data:
                 debug_data[f"{surface}_{i}"]["merged_after_speed_filter"] = Merged.copy()
             
-            #added the classifier 
+            #added the surface classifier 
             Merged["srf"] = surface
             if i in train_measurements_for_surface :
                 #adding final result to full data frame
@@ -439,29 +480,10 @@ def build_surface_dataset(
             elif i in test_measurements :
                 test_data[surface] = pd.concat([test_data[surface], Merged],ignore_index=True)
             
+            #add id of the measurement example: Cobble_1, Cobble_2, etc...
+            Merged["measurement_id"] = f"{surface}_{i}"
+            
             full_window_dataset = pd.concat([full_window_dataset, Merged], ignore_index=True)
             
-    data_set = pd.concat(
-        [surface_data[surface] for surface in surface_types if not surface_data[surface].empty],
-        ignore_index=True,
-    )
-    test_data = pd.concat(
-        [test_data[surface] for surface in surface_types if not test_data[surface].empty],
-        ignore_index=True,
-    )
-    #keep only data we want to use as attributs
-    data_set = data_set.iloc[:, 11:]
-    test_data = test_data.iloc[:, 11:]
-
-    # ==================================
-    # SHUFFLE TRAIN DATA
-    # ==================================
-
-    data_set = data_set.sample(frac=1,random_state=42).reset_index(drop=True)
-    test_data = test_data.reset_index(drop=True)
-
-    if return_debug:
-        return data_set, test_data, debug_data
-
-    return data_set, test_data, full_window_dataset
+    return  full_window_dataset
     

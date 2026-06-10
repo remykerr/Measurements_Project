@@ -6,6 +6,10 @@ scales the features, and calls the shared evaluation utility for each selected
 machine-learning model.
 """
 
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn import neighbors, svm
 from sklearn.preprocessing import StandardScaler
@@ -14,7 +18,10 @@ from Dataset_construction import build_surface_dataset
 from ML_utils import evaluate_model
 
 
-train_df, test_df = build_surface_dataset() 
+OUTPUT_DIR = Path(__file__).resolve().parent / "model_results"
+
+
+train_df, test_df, _ = build_surface_dataset() 
 
 # sanity check of dimensions
 print("train_df shape:", train_df.shape)
@@ -55,27 +62,3 @@ evaluate_model(
     Y_test,
     "KNN Classifier",
 )
-
-plt.show()
-
-# ==================================
-# Exporting trained model
-# ==================================
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
-import joblib
-
-surface_classifier = Pipeline([
-    ("scaler", StandardScaler()),
-    ("classifier", SVC(
-        kernel="rbf",
-        probability=True
-    ))
-])
-
-surface_classifier.fit(X_train, Y_train)
-
-joblib.dump(
-    surface_classifier,
-    "Road_Surface_Classifier.pkl")
