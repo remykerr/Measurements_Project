@@ -385,8 +385,8 @@ def build_prediction_dataset(
 
 Full_df = pd.DataFrame({})
 for i in range (1,8) :
-    Accel_file = f"Test_files/Measurements/Accelerometer_{i}.csv"
-    GPS_file = f"Test_files/Measurements/Location_{i}.csv"
+    Accel_file = f"Measurements/Accelerometer_{i}.csv"
+    GPS_file = f"Measurements/Location_{i}.csv"
     single_run_df = build_prediction_dataset(Accel_file, GPS_file)
     single_run_df["run_id"] = i
     Full_df = pd.concat([Full_df,single_run_df])
@@ -409,7 +409,7 @@ feature_columns = [
 
 X = Full_df[feature_columns]
 
-classifier = joblib.load(f"Test_files/Road_Surface_Classifier.pkl")
+classifier = joblib.load(f"Road_Surface_Classifier.pkl")
 
 surface_predictions = classifier.predict(X)
 
@@ -417,10 +417,10 @@ Full_df["surface_prediction"] = surface_predictions
 
 # Smooth the ISO comfort score and the surface label to reduce second-to-second noise.
 Full_df["aw_smooth"] = Full_df.groupby("run_id")["aw"].transform(
-    lambda s: s.rolling(window=3, center=True, min_periods=1).mean()
+    lambda s: s.rolling(window=1, center=True, min_periods=1).mean()
 )
 
-def smooth_labels(label_series, window=3):
+def smooth_labels(label_series, window=1):
     labels = label_series.tolist()
     smoothed = []
     half = window // 2

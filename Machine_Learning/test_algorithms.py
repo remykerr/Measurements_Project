@@ -62,3 +62,25 @@ evaluate_model(
     Y_test,
     "KNN Classifier",
 )
+
+# ==================================
+# Exporting trained model
+# ==================================
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+import joblib
+
+surface_classifier = Pipeline([
+    ("scaler", StandardScaler()),
+    ("classifier", SVC(
+        kernel="rbf",
+        probability=True
+    ))
+])
+
+surface_classifier.fit(X_train, Y_train)
+
+joblib.dump(
+    surface_classifier,
+    "Road_Surface_Classifier.pkl")
