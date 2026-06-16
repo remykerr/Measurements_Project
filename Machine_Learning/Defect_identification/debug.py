@@ -19,7 +19,7 @@ from Machine_Learning.Defect_identification.Dataset_construction import build_su
 
 DEBUG_SURFACE = "Smooth_asphalt"
 DEBUG_MEASUREMENT = 6
-DEBUG_WINDOW_INDEX = [30,31,32]
+DEBUG_WINDOW_INDEX = [30]
 
 window_df, debug_data = build_surface_dataset(
     plot_debug=True,

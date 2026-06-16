@@ -88,7 +88,7 @@ def normalize_debug_window_indices(debug_window_index, n_windows):
 
 def build_surface_dataset(
     base_dir=BASE_DIR,
-    surface_types=("Smooth_asphalt",),
+    surface_types=("Smooth_asphalt", "Rough_asphalt"),
     measurement_ids=None,
     fsamp=None,
     stationary_seconds=3.0,
@@ -319,6 +319,11 @@ def build_surface_dataset(
                         debug_time,
                         debug_segment,
                         label=f"Window {index}",
+                    )
+                    plt.scatter(
+                        debug_time,
+                        debug_segment,
+                        s=12,
                     )
                 plt.xlabel("Time [s]")
                 plt.ylabel("Acc [m/s^2]")
