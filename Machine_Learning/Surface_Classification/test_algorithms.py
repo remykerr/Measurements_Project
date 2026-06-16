@@ -14,8 +14,12 @@ import matplotlib.pyplot as plt
 from sklearn import neighbors, svm
 from sklearn.preprocessing import StandardScaler
 
-from Dataset_construction import build_surface_dataset
-from ML_utils import evaluate_model
+try:
+    from .Dataset_construction import build_surface_dataset
+    from .ML_utils import evaluate_model
+except ImportError:
+    from Dataset_construction import build_surface_dataset
+    from ML_utils import evaluate_model
 
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "model_results"

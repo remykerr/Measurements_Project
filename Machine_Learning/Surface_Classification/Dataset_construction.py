@@ -6,9 +6,13 @@ import warnings
 from pathlib import Path
 from scipy.signal import butter, filtfilt
 from scipy.stats import kurtosis, skew
-from gravity_correction import correct_gravity
 
-BASE_DIR = Path(__file__).resolve().parent
+try:
+    from .gravity_correction import correct_gravity
+except ImportError:
+    from gravity_correction import correct_gravity
+
+BASE_DIR = Path(__file__).resolve().parents[1]
 DEBUG_OUTPUT_KEYS = (
     "sampling_frequency",
     "raw_acceleration",

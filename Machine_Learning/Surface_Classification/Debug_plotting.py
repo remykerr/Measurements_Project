@@ -8,12 +8,15 @@ Parameters:
 - plot_debug: if True, plots gravity correction, DFT and PSD
 """
 
-from Dataset_construction import build_surface_dataset
+try:
+    from .Dataset_construction import build_surface_dataset
+except ImportError:
+    from Dataset_construction import build_surface_dataset
 
 
-DEBUG_SURFACE = "Rough_asphalt"
+DEBUG_SURFACE = "Unpaved"
 DEBUG_MEASUREMENT = 6
-DEBUG_WINDOW_INDEX = 1
+DEBUG_WINDOW_INDEX = 2
 
 train_df, test_df, debug_data = build_surface_dataset(
     plot_debug=True,
@@ -25,19 +28,6 @@ train_df, test_df, debug_data = build_surface_dataset(
 )
 
 debug_key = f"{DEBUG_SURFACE}_{DEBUG_MEASUREMENT}"
-if debug_key not in debug_data:
-    matching_keys = [
-        key for key in debug_data
-        if key.lower() == debug_key.lower()
-    ]
-    if not matching_keys:
-        available_keys = ", ".join(debug_data) or "none"
-        raise KeyError(
-            f"Debug key {debug_key!r} not found. "
-            f"Available debug keys: {available_keys}"
-        )
-    debug_key = matching_keys[0]
-
 d = debug_data[debug_key]
 
 print("Sampling frequency:", d["sampling_frequency"])
