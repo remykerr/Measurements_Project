@@ -1,63 +1,69 @@
 
-import os
-import numpy as np
+import ast
+import sys
 import matplotlib.pyplot as plt
 import pandas as pd
 from pathlib import Path
-from scipy.signal import butter, filtfilt
 import folium
-import re
-from gravity_correction import correct_gravity
-from scipy.stats import kurtosis, skew
 import joblib
 
-def discover_measurement_ids(clean_measurements_dir, surface):
-    pattern = re.compile(rf"^{re.escape(surface)}_(\d+)$", re.IGNORECASE)
-    measurement_ids = []
-    if not clean_measurements_dir.exists():
-        return measurement_ids
+BASE_DIR = Path(__file__).resolve().parent
+MEASUREMENTS_DIR = BASE_DIR / "Measurements"
+TEST_CIRCUIT_DIR = BASE_DIR / "Test circuit"
+MODEL_FILE = BASE_DIR / "Road_Surface_Classifier.pkl"
+HAZARD_MODEL_FILE = BASE_DIR / "Road_Hazard_Classifier.pkl"
+OUTPUT_MAP_FILE = BASE_DIR / "Rugosity_Map_Milan_CL.html"
+TEST_6_FILE = BASE_DIR / "Test_6.py"
+DATA_SOURCE = "test_circuit"
+ENABLE_HAZARD_DETECTION = False
+COMFORT_SMOOTHING_WINDOW = 3
+SURFACE_SMOOTHING_WINDOW = 5
+HAZARD_SMOOTHING_WINDOW = 3
+SURFACE_COLORS = {
+    "Smooth_asphalt": "#2ca02c",
+    "Medium_asphalt": "#ffbf00",
+    "Medium_rough_asphalt": "#ffbf00",
+    "Rough_asphalt": "#d62728",
+    "cobble": "#9467bd",
+    "Unpaved": "#8c564b",
+    "Grass": "#17becf",
+}
+DEFAULT_SURFACE_COLOR = "#6c757d"
 
-    for child in clean_measurements_dir.iterdir():
-        if not child.is_dir():
-            continue
-        match = pattern.match(child.name)
-        if match:
-            measurement_ids.append(int(match.group(1)))
-    return sorted(measurement_ids)
-def find_column(data, prefix):
-    prefix = prefix.lower()
-    for column in data.columns:
-        if column.strip().lower().startswith(prefix):
-            return column
-    available = ", ".join(data.columns)
-    raise KeyError(f"Expected a column starting with {prefix}. Available columns: {available}")
-def estimate_sampling_frequency(time_values):
-    time_values = np.asarray(time_values, dtype=float)
-    time_steps = np.diff(time_values)
-    time_steps = time_steps[time_steps > 0]
-    if len(time_steps) == 0:
-        raise ValueError("Cannot estimate sampling frequency from non-increasing timestamps.")
-    return 1.0 / np.median(time_steps)
-def iso_color(aw):
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
-    if aw < 0.315:
-        return 'blue'
-    elif aw < 0.63:
-        return 'green'
-    elif aw < 1:
-        return 'yellow'
-    elif aw < 1.6:
-        return 'orange'
-    elif aw < 2.5:
-        return 'red'
-    else:
-        return 'black'
+
+def load_test6_functions():
+    """Load helpers from Test_6.py without running its plotting script."""
+    source = TEST_6_FILE.read_text(encoding="utf-8")
+    source = source.replace(
+        "segment_times.append(Accel_z.index[k])",
+        "center_index = k + window_size // 2\n        "
+        "segment_times.append(Accel_z.index[center_index])",
+    )
+    tree = ast.parse(source, filename=str(TEST_6_FILE))
+    reusable_nodes = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.Import, ast.ImportFrom, ast.FunctionDef))
+    ]
+    module = ast.Module(body=reusable_nodes, type_ignores=[])
+    ast.fix_missing_locations(module)
+
+    namespace = {"__file__": str(TEST_6_FILE)}
+    exec(compile(module, str(TEST_6_FILE), "exec"), namespace)
+    return namespace["build_prediction_dataset"], namespace["iso_color"]
+
+
+build_prediction_dataset, iso_color = load_test6_functions()
+
 
 def surface_image_html(surface):
     if surface in ("Pothole", "Speedbump"):
         return ''
 
-    image_dir = Path(__file__).resolve().parent / "images"
+    image_dir = BASE_DIR / "images"
     if not image_dir.is_dir():
         return ''
 
@@ -80,316 +86,50 @@ def surface_image_html(surface):
 
     return ''
 
-def build_prediction_dataset(
-    accel_file,
-    gps_file,
-    v_ref=2.5,
-    fsamp=None,
-    stationary_seconds=3.0,
-    min_speed=1.0,
-):
-    """
-    Computes exactly the same features used during training
-    and returns GPS coordinates together with ML features.
 
-    Returns
-    -------
-    DataFrame
-        lat
-        long
-        v
-        feature columns...
-    """
+def surface_color(surface):
+    return SURFACE_COLORS.get(surface, DEFAULT_SURFACE_COLOR)
 
-    Accel_data = pd.read_csv(accel_file)
-    GPS_data = pd.read_csv(gps_file)
-    # ==========================================
-    # ISO 2631-1 Wk weighting table
-    # ==========================================
-    
-    ISO_FREQ = np.array([
-        0.5,0.63,0.8,1,1.25,1.6,2,2.5,3.15,4,
-        5,6.3,8,10,12.5,16,20,25,31.5,40,50
-    ])
-    
-    ISO_WK = np.array([
-        0.418,0.459,0.477,0.482,0.484,0.494,
-        0.531,0.631,0.804,0.967,
-        1.039,1.054,1.036,0.988,0.902,0.768,
-        0.636,0.513,0.405,0.314,0.246
-    ])
-    # ==================================
-    # GRAVITY CORRECTION
-    # ==================================
 
-    Accel_corrected, _ = correct_gravity(
-        Accel_data,
-        stationary_seconds=stationary_seconds,
-        expected_g=9.81,
-    )
+def comfort_class(color):
+    if color == "blue":
+        return "Comfortable"
+    if color == "green":
+        return "A Little Uncomfortable"
+    if color == "yellow":
+        return "Fairly Uncomfortable"
+    if color == "orange":
+        return "Uncomfortable"
+    if color == "red":
+        return "Very Uncomfortable"
+    return "Extremely Uncomfortable"
 
-    True_z_accel_data = Accel_corrected["a_vertical_no_g"]
 
-    current_fsamp = (
-        estimate_sampling_frequency(Accel_data["Time (s)"])
-        if fsamp is None
-        else fsamp
-    )
-
-    # ==================================
-    # HIGH PASS FILTER
-    # ==================================
-
-    def hp_filter(signal, fs, fc=0.5, order=4):
-        b, a = butter(order, fc/(fs/2), btype="high")
-        return filtfilt(b, a, signal)
-
-    True_z_accel_data = hp_filter(
-        True_z_accel_data,
-        fs=current_fsamp
-    )
-
-    Accel_z = pd.DataFrame({
-        "t": Accel_data["Time (s)"],
-        "az": True_z_accel_data
-    })
-
-    # ==================================
-    # GPS DATA
-    # ==================================
-
-    latitude_col = find_column(GPS_data, "latitude")
-    longitude_col = find_column(GPS_data, "longitude")
-
-    GPS = pd.DataFrame({
-        "t": GPS_data["Time (s)"],
-        "lat": GPS_data[latitude_col],
-        "long": GPS_data[longitude_col],
-        "v": GPS_data["Velocity (m/s)"]
-    })
-
-    # ==================================
-    # TIME INDEXING
-    # ==================================
-
-    Accel_z["t"] = pd.to_timedelta(Accel_z["t"], unit="s")
-    GPS["t"] = pd.to_timedelta(GPS["t"], unit="s")
-
-    Accel_z = Accel_z.set_index("t")
-
-    # ==================================
-    # FFT FEATURES
-    # ==================================
-
-    window_size = int(round(current_fsamp))
-
-    signal = Accel_z["az"].values
-
-    segments = []
-    segment_times = []
-
-    for k in range(0, len(signal)-window_size, window_size):
-        segments.append(signal[k:k+window_size])
-        center_index = k + window_size // 2
-        segment_times.append(Accel_z.index[center_index])
-
-    segments = np.array(segments)
-
-    N = window_size
-
-    window = np.hanning(N)
-
-    segments_windowed = segments * window
-
-    dft = np.fft.rfft(
-        segments_windowed,
-        axis=1
-    ) / N
-
-    freq = np.fft.rfftfreq(
-        N,
-        d=1/current_fsamp
-    )
-
-    ps = np.abs(dft)**2
-
-    if N % 2 == 0:
-        ps[:,1:-1] *= 2
-    else:
-        ps[:,1:] *= 2
-
-    df = current_fsamp / N
-
-    psd = ps / df
-    
-    # ==========================================
-    # ISO 2631-1 Wk weighted acceleration
-    # ==========================================
-    
-    wk_interp = np.interp(
-        freq,
-        ISO_FREQ,
-        ISO_WK,
-        left=0,
-        right=0
-    )
-    
-    psd_weighted = psd * (wk_interp ** 2)
-    
-    # Frequency weighted RMS acceleration
-    aw = np.sqrt(
-        np.sum(psd_weighted * df, axis=1)
-    )
-
-    band0 = (freq >= 0.5) & (freq <= 50)
-    band1 = (freq >= 3) & (freq <= 10)
-    band2 = (freq >= 10) & (freq <= 20)
-
-    spec_energy = np.sum(psd[:, band0], axis=1)
-    comfort_energy = np.sum(psd[:, band1], axis=1)
-    texture_energy = np.sum(psd[:, band2], axis=1)
-
-    dominant_freq = freq[np.argmax(psd, axis=1)]
-
-    periodicity_strengths = []
-
-    for seg in segments:
-
-        seg_centered = seg - np.mean(seg)
-
-        acf = np.correlate(
-            seg_centered,
-            seg_centered,
-            mode="full"
+def build_graph_input(data_source):
+    if data_source == "test_circuit":
+        single_run_df = build_prediction_dataset(
+            TEST_CIRCUIT_DIR / "Accelerometer.csv",
+            TEST_CIRCUIT_DIR / "Location.csv",
         )
+        single_run_df["run_id"] = 1
+        return single_run_df
 
-        acf = acf[len(acf)//2:]
+    if data_source == "measurements":
+        full_df = pd.DataFrame({})
+        for i in range(1, 8):
+            accel_file = MEASUREMENTS_DIR / f"Accelerometer_{i}.csv"
+            gps_file = MEASUREMENTS_DIR / f"Location_{i}.csv"
+            single_run_df = build_prediction_dataset(accel_file, gps_file)
+            single_run_df["run_id"] = i
+            full_df = pd.concat([full_df, single_run_df])
+        return full_df
 
-        acf = acf / np.max(acf)
-
-        periodicity_strengths.append(
-            np.max(acf[1:])
-        )
-
-    FFT_metrics = pd.DataFrame({
-    "t": segment_times,
-    # PSD metrics
-    "spec_energy": spec_energy,
-    "comfort_energy": comfort_energy,
-    "texture_energy": texture_energy,
-    "dominant_freq": dominant_freq,
-    # Periodicity metrics
-    "periodicity_strength": periodicity_strengths,
-    # ISO comfort metrics
-    "aw": aw,})
-    
-    # ==================================
-    # TIME DOMAIN FEATURES
-    # ==================================
-
-    def rms(x):
-        return np.sqrt(np.mean(x**2))
-
-    def kurt(x):
-        return kurtosis(x)
-
-    def crest(x):
-        return abs(np.max(x)) / (rms(x) + 1e-12)
-
-    def skew_(x):
-        return skew(x)
-
-    Accel_avg = Accel_z.resample("1s").mean()
-    Accel_rms = Accel_z.resample("1s").apply(rms)
-    Accel_std = Accel_z.resample("1s").std()
-    Accel_peak = Accel_z.resample("1s").max()
-    Accel_kurt = Accel_z.resample("1s").apply(kurt)
-    Accel_crest = Accel_z.resample("1s").apply(crest)
-    Accel_skew = Accel_z.resample("1s").apply(skew_)
-
-    Accel_avg.columns = ["az_avg"]
-    Accel_rms.columns = ["az_rms"]
-    Accel_std.columns = ["az_std"]
-    Accel_peak.columns = ["az_peak"]
-    Accel_kurt.columns = ["az_kurt"]
-    Accel_crest.columns = ["az_crest"]
-    Accel_skew.columns = ["az_skew"]
-
-    Accel_metrics = pd.concat([
-        Accel_avg,
-        Accel_rms,
-        Accel_std,
-        Accel_peak,
-        Accel_kurt,
-        Accel_crest,
-        Accel_skew
-    ], axis=1)
-
-    # ==================================
-    # MERGING
-    # ==================================
-
-    Merged = pd.merge_asof(
-        GPS.sort_values("t"),
-        Accel_metrics.reset_index().sort_values("t"),
-        on="t"
+    raise ValueError(
+        "DATA_SOURCE must be 'test_circuit' or 'measurements'."
     )
 
-    Merged["Norm_az_avg"] = (
-        Merged["az_avg"] /
-        np.sqrt(v_ref / Merged["v"])
-    )
 
-    Merged["Norm_az_rms"] = (
-        Merged["az_rms"] /
-        np.sqrt(v_ref / Merged["v"])
-    )
-
-    Merged["Norm_az_std"] = (
-        Merged["az_std"] /
-        np.sqrt(v_ref / Merged["v"])
-    )
-
-    Merged["Norm_az_peak"] = (
-        Merged["az_peak"] /
-        np.sqrt(v_ref / Merged["v"])
-    )
-
-    Merged["Norm_az_kurt"] = (
-        Merged["az_kurt"] /
-        np.sqrt(v_ref / Merged["v"])
-    )
-
-    Merged["Norm_az_crest"] = (
-        Merged["az_crest"] /
-        np.sqrt(v_ref / Merged["v"])
-    )
-
-    Merged["Norm_az_skew"] = (
-        Merged["az_skew"] /
-        np.sqrt(v_ref / Merged["v"])
-    )
-
-    Merged = pd.merge_asof(
-        Merged.sort_values("t"),
-        FFT_metrics.sort_values("t"),
-        on="t"
-    )
-
-    # Remove low speed samples
-
-    Merged = Merged[Merged["v"] > min_speed]
-
-    return Merged.reset_index(drop=True)
-
-
-Full_df = pd.DataFrame({})
-for i in range (1,8) :
-    Accel_file = f"Measurements/Accelerometer_{i}.csv"
-    GPS_file = f"Measurements/Location_{i}.csv"
-    single_run_df = build_prediction_dataset(Accel_file, GPS_file)
-    single_run_df["run_id"] = i
-    Full_df = pd.concat([Full_df,single_run_df])
+Full_df = build_graph_input(DATA_SOURCE)
 
 Full_df = Full_df.sort_values(["run_id", "t"]).reset_index(drop=True)
 
@@ -409,18 +149,28 @@ feature_columns = [
 
 X = Full_df[feature_columns]
 
-classifier = joblib.load(f"Road_Surface_Classifier.pkl")
+classifier = joblib.load(MODEL_FILE)
 
 surface_predictions = classifier.predict(X)
 
 Full_df["surface_prediction"] = surface_predictions
 
+if ENABLE_HAZARD_DETECTION:
+    hazard_classifier = joblib.load(HAZARD_MODEL_FILE)
+    Full_df["hazard_prediction"] = hazard_classifier.predict(X)
+else:
+    Full_df["hazard_prediction"] = "None"
+
 # Smooth the ISO comfort score and the surface label to reduce second-to-second noise.
 Full_df["aw_smooth"] = Full_df.groupby("run_id")["aw"].transform(
-    lambda s: s.rolling(window=1, center=True, min_periods=1).mean()
+    lambda s: s.rolling(
+        window=COMFORT_SMOOTHING_WINDOW,
+        center=True,
+        min_periods=1,
+    ).mean()
 )
 
-def smooth_labels(label_series, window=1):
+def smooth_labels(label_series, window=3):
     labels = label_series.tolist()
     smoothed = []
     half = window // 2
@@ -434,7 +184,13 @@ def smooth_labels(label_series, window=1):
 
 Full_df["surface_prediction_smoothed"] = (
     Full_df.groupby("run_id")["surface_prediction"]
-           .apply(lambda s: smooth_labels(s, window=3))
+           .apply(lambda s: smooth_labels(s, window=SURFACE_SMOOTHING_WINDOW))
+           .reset_index(level=0, drop=True)
+)
+
+Full_df["hazard_prediction_smoothed"] = (
+    Full_df.groupby("run_id")["hazard_prediction"]
+           .apply(lambda s: smooth_labels(s, window=HAZARD_SMOOTHING_WINDOW))
            .reset_index(level=0, drop=True)
 )
 
@@ -457,7 +213,7 @@ def mark_stable_hazards(label_series, min_block=2):
     return pd.Series(keep, index=label_series.index)
 
 Full_df["show_hazard_marker"] = (
-    Full_df.groupby("run_id")["surface_prediction_smoothed"]
+    Full_df.groupby("run_id")["hazard_prediction_smoothed"]
            .apply(lambda s: mark_stable_hazards(s, min_block=2))
            .reset_index(level=0, drop=True)
 )
@@ -548,8 +304,13 @@ complete_map = folium.Map(
     tiles='OpenStreetMap'
 )
 
+comfort_layer = folium.FeatureGroup(name="Comfort", show=True)
+surface_layer = folium.FeatureGroup(name="Surface prediction", show=False)
+comfort_layer.add_to(complete_map)
+surface_layer.add_to(complete_map)
+
 # ==========================================
-# ADD ISO-COLORED CONTINUOUS LINE WITH POPUPS
+# ADD CONTINUOUS ROUTE LAYERS WITH POPUPS
 # ==========================================
 
 for i in range(len(Full_df) - 1):
@@ -563,14 +324,17 @@ for i in range(len(Full_df) - 1):
 
     aw = current_line["aw_smooth"]
     color = current_line["iso_color"]
-    image_html = surface_image_html(current_line["surface_prediction_smoothed"])
+    surface = current_line["surface_prediction_smoothed"]
+    surface_line_color = surface_color(surface)
+    image_html = surface_image_html(surface)
+    segment_locations = [
+        [current_line["lat"], current_line["long"]],
+        [next_line["lat"], next_line["long"]]
+    ]
 
     # Create line segment between consecutive points
     folium.PolyLine(
-        locations=[
-            [current_line["lat"], current_line["long"]],
-            [next_line["lat"], next_line["long"]]
-        ],
+        locations=segment_locations,
         color=color,
         weight=4,
         opacity=0.8,
@@ -608,7 +372,36 @@ for i in range(len(Full_df) - 1):
                 </table>
                 """
         )
-    ).add_to(complete_map)
+    ).add_to(comfort_layer)
+
+    folium.PolyLine(
+        locations=segment_locations,
+        color=surface_line_color,
+        weight=4,
+        opacity=0.8,
+        popup=(f"""
+                <table>
+                <tr><td colspan="2"><b><u>Surface Prediction</u></b></td></tr>
+                
+                <tr>
+                    <td><u>Predicted Surface:</u></td>
+                    <td><b>{surface}</b></td>
+                </tr>
+                
+                <tr>
+                    <td><u>aw:</u></td>
+                    <td>{aw:.3f} m/sÂ²</td>
+                </tr>
+                
+                <tr>
+                    <td><u>Velocity:</u></td>
+                    <td>{current_line['v']:.1f} m/s</td>
+                </tr>
+                {image_html}
+                </table>
+                """
+        )
+    ).add_to(surface_layer)
 
 # ==========================================
 # ADD POTHOLE AND SPEEDBUMP MARKERS
@@ -617,7 +410,7 @@ for i in range(len(Full_df) - 1):
 for i in range(len(Full_df)):
     
     line = Full_df.iloc[i]
-    surface = line["surface_prediction_smoothed"]
+    surface = line["hazard_prediction_smoothed"]
     
     # Only mark Potholes and Speedbumps that are stable blocks.
     if not line.get("show_hazard_marker", False):
@@ -703,16 +496,7 @@ for i in range(len(Full_df)):
 
 legend_html = """
 
-<button id="legend-toggle" onclick="
-  const legend = document.getElementById('iso-legend');
-  if (legend.style.display === 'none') {
-    legend.style.display = 'block';
-    this.textContent = 'Hide Legend';
-  } else {
-    legend.style.display = 'none';
-    this.textContent = 'Show Legend';
-  }
-" style="
+<button id="route-mode-toggle" style="
   position: fixed;
   top: 20px;
   left: 100px;
@@ -725,10 +509,35 @@ legend_html = """
   font-size: 14px;
   font-weight: bold;
 ">
+  Show Surface Colors
+</button>
+
+<button id="legend-toggle" onclick="
+  const legend = document.querySelector('.route-legend[data-active=&quot;true&quot;]');
+  if (legend.style.display === 'none') {
+    legend.style.display = 'block';
+    this.textContent = 'Hide Legend';
+  } else {
+    legend.style.display = 'none';
+    this.textContent = 'Show Legend';
+  }
+" style="
+  position: fixed;
+  top: 20px;
+  left: 280px;
+  z-index: 10000;
+  padding: 8px 12px;
+  background-color: white;
+  border: 2px solid grey;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+">
   Hide Legend
 </button>
 
-<div id="iso-legend" style="
+<div id="iso-legend" class="route-legend" data-active="true" style="
 position: fixed;
 bottom: 100px;
 left: 100px;
@@ -833,10 +642,93 @@ opacity:0.9;"></i>
 Speedbump
 
 </div>
+
+<div id="surface-legend" class="route-legend" data-active="false" style="
+position: fixed;
+bottom: 100px;
+left: 100px;
+width: 280px;
+background-color: white;
+border:2px solid grey;
+z-index:9999;
+font-size:14px;
+padding:10px;
+display:none;
+">
+
+<b>Surface Prediction</b><br><br>
+
+<i style="background:#2ca02c;width:14px;height:14px;float:left;margin-right:8px;opacity:0.8;"></i>
+Smooth asphalt<br><br>
+
+<i style="background:#ffbf00;width:14px;height:14px;float:left;margin-right:8px;opacity:0.8;"></i>
+Medium asphalt<br><br>
+
+<i style="background:#d62728;width:14px;height:14px;float:left;margin-right:8px;opacity:0.8;"></i>
+Rough asphalt<br><br>
+
+<i style="background:#9467bd;width:14px;height:14px;float:left;margin-right:8px;opacity:0.8;"></i>
+Cobble<br><br>
+
+<i style="background:#8c564b;width:14px;height:14px;float:left;margin-right:8px;opacity:0.8;"></i>
+Unpaved<br><br>
+
+<i style="background:#17becf;width:14px;height:14px;float:left;margin-right:8px;opacity:0.8;"></i>
+Grass
+
+</div>
 """
 
 complete_map.get_root().html.add_child(
     folium.Element(legend_html)
+)
+
+mode_toggle_js = f"""
+setTimeout(function() {{
+const routeMap = {complete_map.get_name()};
+const comfortLayer = {comfort_layer.get_name()};
+const surfaceLayer = {surface_layer.get_name()};
+window.currentRouteColorMode = "comfort";
+
+function setRouteColorMode(mode) {{
+  const comfortLegend = document.getElementById("iso-legend");
+  const surfaceLegend = document.getElementById("surface-legend");
+  const modeButton = document.getElementById("route-mode-toggle");
+  const legendButton = document.getElementById("legend-toggle");
+
+  if (mode === "surface") {{
+    if (routeMap.hasLayer(comfortLayer)) routeMap.removeLayer(comfortLayer);
+    if (!routeMap.hasLayer(surfaceLayer)) routeMap.addLayer(surfaceLayer);
+    comfortLegend.style.display = "none";
+    comfortLegend.dataset.active = "false";
+    surfaceLegend.style.display = "block";
+    surfaceLegend.dataset.active = "true";
+    modeButton.textContent = "Show Comfort Colors";
+  }} else {{
+    if (routeMap.hasLayer(surfaceLayer)) routeMap.removeLayer(surfaceLayer);
+    if (!routeMap.hasLayer(comfortLayer)) routeMap.addLayer(comfortLayer);
+    surfaceLegend.style.display = "none";
+    surfaceLegend.dataset.active = "false";
+    comfortLegend.style.display = "block";
+    comfortLegend.dataset.active = "true";
+    modeButton.textContent = "Show Surface Colors";
+  }}
+
+  legendButton.textContent = "Hide Legend";
+  window.currentRouteColorMode = mode;
+}}
+
+document.getElementById("route-mode-toggle").addEventListener("click", function() {{
+  const nextMode = window.currentRouteColorMode === "comfort" ? "surface" : "comfort";
+  setRouteColorMode(nextMode);
+}});
+
+setRouteColorMode("comfort");
+}}, 0);
+"""
+
+complete_map.get_root().script.add_child(
+    folium.Element(mode_toggle_js)
 )
 
 # ==========================================
@@ -844,11 +736,5 @@ complete_map.get_root().html.add_child(
 # ==========================================
 
 complete_map.save(
-    "Rugosity_Map_Milan_CL.html"
+    OUTPUT_MAP_FILE
 )
-
-
-
-
-
-    
