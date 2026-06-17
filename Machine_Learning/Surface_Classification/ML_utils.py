@@ -11,7 +11,7 @@ import numpy as np
 from sklearn import metrics
 from sklearn.metrics import ConfusionMatrixDisplay
 
-def evaluate_model(model, X_train, y_train, X_test, y_test, model_name):
+def evaluate_model(model, X_train, y_train, X_test, y_test, model_name, test_id=None):
     """
     Fit a classifier and report its performance on the test set.
 
@@ -42,6 +42,12 @@ def evaluate_model(model, X_train, y_train, X_test, y_test, model_name):
         f"F1-score : "
         f"{metrics.f1_score(y_test, y_pred, average='macro'):.3f}"
     )
+    
+    f1 = metrics.f1_score(y_test, y_pred, average='macro')
+    accuracy = metrics.accuracy_score(y_test, y_pred)
+    recall = metrics.recall_score(y_test, y_pred, average='macro')
+    precision = metrics.precision_score(y_test, y_pred, average='macro')
+
     # Confusion matrix
     print("\nConfusion Matrix :")
     print(metrics.confusion_matrix(y_test, y_pred))
@@ -51,8 +57,8 @@ def evaluate_model(model, X_train, y_train, X_test, y_test, model_name):
 
     # Plot non-normalized confusion matrix
     titles_options = [
-        (f"Confusion matrix |Test Set| {model_name}", None),
-        (f"Normalized confusion matrix |Test Set| {model_name}", "true"),
+        (f"Confusion matrix |Test Set| {model_name} | test_id={test_id}", None),
+        (f"Normalized confusion matrix |Test Set| {model_name} | test_id={test_id}", "true"),
     ]
     for title, normalize in titles_options:
         _, ax = plt.subplots(figsize=(8, 6))
@@ -77,32 +83,32 @@ def evaluate_model(model, X_train, y_train, X_test, y_test, model_name):
     ### Train Confusion matrix visualization
     np.set_printoptions(precision=2)
 
-    # Plot non-normalized confusion matrix
-    titles_options = [
-        (f"Confusion matrix |Train Set| {model_name}", None),
-        (f"Normalized confusion matrix |Train Set| {model_name}", "true"),
-    ]
-    for title, normalize in titles_options:
-        _, ax = plt.subplots(figsize=(8, 6))
-        disp = ConfusionMatrixDisplay.from_estimator(
-            model,
-            X_train,
-            y_train,
-            display_labels=model.classes_,
-            cmap=plt.cm.Blues,
-            normalize=normalize,
-            ax=ax,
-        )
-        disp.ax_.set_title(title)
-        disp.ax_.tick_params(axis="x", labelrotation=30)
+    # # Plot non-normalized confusion matrix
+    # titles_options = [
+    #     (f"Confusion matrix |Train Set| {model_name} | test_id={test_id}", None),
+    #     (f"Normalized confusion matrix |Train Set| {model_name} | test_id={test_id}", "true"),
+    # ]
+    # for title, normalize in titles_options:
+    #     _, ax = plt.subplots(figsize=(8, 6))
+    #     disp = ConfusionMatrixDisplay.from_estimator(
+    #         model,
+    #         X_train,
+    #         y_train,
+    #         display_labels=model.classes_,
+    #         cmap=plt.cm.Blues,
+    #         normalize=normalize,
+    #         ax=ax,
+    #     )
+    #     disp.ax_.set_title(title)
+    #     disp.ax_.tick_params(axis="x", labelrotation=30)
 
-        for label in disp.ax_.get_xticklabels():
-            label.set_horizontalalignment("right")
+    #     for label in disp.ax_.get_xticklabels():
+    #         label.set_horizontalalignment("right")
 
-        print(title)
-        print(disp.confusion_matrix)
+    #     print(title)
+    #     print(disp.confusion_matrix)
     # Detailed report
     print("\nClassification Report :")
     print(metrics.classification_report(y_test, y_pred))
 
-    return model, y_pred
+    return model, y_pred, f1, accuracy, recall, precision

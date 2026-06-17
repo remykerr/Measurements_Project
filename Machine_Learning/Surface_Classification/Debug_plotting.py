@@ -19,7 +19,7 @@ except ImportError:
     from Dataset_construction import build_surface_dataset
 
 
-DEBUG_SURFACE = "Cobble"
+DEBUG_SURFACE = "Medium_asphalt"
 DEBUG_MEASUREMENT = 1
 DEBUG_WINDOW_INDEX =10
 

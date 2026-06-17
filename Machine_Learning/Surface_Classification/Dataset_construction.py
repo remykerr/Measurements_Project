@@ -60,11 +60,19 @@ def estimate_sampling_frequency(time_values):
     return 1.0 / np.median(time_steps)
 
 
+all_classes = False # true if you want to use all classes, False if you want to use only the three main classes (Rough_asphalt, Smooth_asphalt, Medium_asphalt)
+
+surface_types = ("Rough_asphalt", "Smooth_asphalt", "Medium_asphalt")  # default surface types
+
+if all_classes:
+    surface_types = ("Rough_asphalt", "Smooth_asphalt", "Medium_asphalt", "cobble", "Grass", "Unpaved")
+
+
 def build_surface_dataset(
     base_dir=BASE_DIR,
-    surface_types=("cobble", "Rough_asphalt", "Smooth_asphalt", "Grass", "Unpaved"),#, "Speedbump", "Pothole"), 
+    surface_types=surface_types,
     train_measurements=None,
-    test_measurements=(4,),
+    test_measurements=(5,),
     v_ref=2.5,
     fsamp=None,
     stationary_seconds=3.0,
