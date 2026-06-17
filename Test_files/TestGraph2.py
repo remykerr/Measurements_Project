@@ -12,13 +12,19 @@ import pandas as pd
 from pathlib import Path
 import folium
 import joblib
+import numpy as np
+from scipy.signal import resample, butter, filtfilt
+from gravity_correction import correct_gravity
+
 
 Base_Dir = Path(__file__).resolve().parent
 Measurements_Dir = Base_Dir / "Measurements"
 Test_Circuit_Dir = Base_Dir / "Test circuit"
 Model_File = Base_Dir / "knn_surface_classifier.joblib"
-Hazard_Model_File = Base_Dir / "autoencoder_model.keras"
-Output_Map_File = Base_Dir / "Rugosity_Map_Milan_CL.html"
+AE_Model_File    = Base_Dir / "autoencoder_model.keras"
+AE_Scaler_File   = Base_Dir / "ae_scaler.joblib"
+AE_Threshold_File = Base_Dir / "ae_threshold.joblib"
+Output_Map_File = Base_Dir / "Rugosity_Map_Milan_CL2.html"
 Test_6_File = Base_Dir / "Test_6.py"
 Data_Source = "test_circuit"
 Enable_Hazard_Detection = True
@@ -35,7 +41,54 @@ Default_Surface_Color = "#6c757d"
 if str(Base_Dir) not in sys.path:
     sys.path.insert(0, str(Base_Dir))
 
+def hp_filter(signal, fs, fc=0.5, order=4):
+    b, a = butter(order, fc / (fs / 2.0), btype="high")
+    return filtfilt(b, a, signal)
 
+def build_ae_windows(accel_file, gps_file, target_window_size=100, min_speed=1.0):
+    """Replicates your colleague's Dataset_construction pipeline for one measurement."""
+    accel_data = pd.read_csv(accel_file)
+    gps_data   = pd.read_csv(gps_file)
+
+    accel_corrected, _ = correct_gravity(accel_data, stationary_seconds=3.0, expected_g=9.81)
+    vertical = accel_corrected["a_vertical_no_g"].values
+
+    time_s  = accel_data["Time (s)"].values
+    dt      = np.diff(time_s[time_s > 0])
+    fs      = 1.0 / np.median(dt[dt > 0])
+
+    vertical = hp_filter(vertical, fs=fs)
+
+    window_size = int(round(fs))
+    segments, times = [], []
+    for start in range(0, len(vertical) - window_size + 1, window_size):
+        segments.append(vertical[start : start + window_size])
+        times.append(pd.to_timedelta(time_s[start], unit="s"))
+
+    if not segments:
+        return pd.DataFrame()
+
+    segments = np.array(segments)
+    if segments.shape[1] != target_window_size:
+        segments = resample(segments, target_window_size, axis=1)
+
+    window_df = pd.DataFrame(segments, columns=[f"az_{i}" for i in range(target_window_size)])
+    window_df.insert(0, "start_time", times)
+
+    # attach nearest GPS
+    gps = pd.DataFrame({
+        "t":    pd.to_timedelta(gps_data["Time (s)"], unit="s"),
+        "lat":  gps_data.filter(like="atitude").iloc[:, 0],
+        "long": gps_data.filter(like="ongitude").iloc[:, 0],
+        "v":    gps_data["Velocity (m/s)"],
+    })
+    window_df = pd.merge_asof(
+        window_df.sort_values("start_time"),
+        gps.sort_values("t"),
+        left_on="start_time", right_on="t", direction="nearest"
+    ).drop(columns=["t"])
+
+    return window_df[window_df["v"] > min_speed].reset_index(drop=True)
 def load_test6_functions():
     """Load helpers from Test_6.py without running its plotting script."""
     source = Test_6_File.read_text(encoding="utf-8")
@@ -158,10 +211,55 @@ surface_predictions = classifier.predict(X)
 Full_df["surface_prediction"] = surface_predictions
 
 if Enable_Hazard_Detection:
-    hazard_classifier = tf.keras.models.load_model(Hazard_Model_File)
-    hazard_probs = hazard_classifier.predict(X.values)  # .values converts DataFrame → numpy array
-    hazard_labels = ["Defect", "No Defect"]    # ← adjust to match your model's actual class order
-    Full_df["hazard_prediction"] = [hazard_labels[i] for i in hazard_probs.argmax(axis=1)]
+    ae_model     = tf.keras.models.load_model(AE_Model_File)
+    ae_scaler    = joblib.load(AE_Scaler_File)
+    ae_threshold = joblib.load(AE_Threshold_File)
+
+    # Build raw-signal windows for the same source as your map
+    if Data_Source == "test_circuit":
+        ae_windows = build_ae_windows(
+            Test_Circuit_Dir / "Accelerometer.csv",
+            Test_Circuit_Dir / "Location.csv",
+        )
+        ae_windows["run_id"] = 1
+    else:
+        ae_windows = pd.DataFrame()
+        for i in range(1, 8):
+            w = build_ae_windows(
+                Measurements_Dir / f"Accelerometer_{i}.csv",
+                Measurements_Dir / f"Location_{i}.csv",
+            )
+            w["run_id"] = i
+            ae_windows = pd.concat([ae_windows, w], ignore_index=True)
+
+    az_cols = [f"az_{i}" for i in range(100)]
+    X_ae = ae_scaler.transform(ae_windows[az_cols].values)
+
+    reconstructions = ae_model.predict(X_ae)
+    point_errors    = np.abs(X_ae - reconstructions)
+    top_k           = min(10, point_errors.shape[1])
+    recon_errors    = np.mean(np.sort(point_errors, axis=1)[:, -top_k:], axis=1)
+
+    ae_windows["reconstruction_error"] = recon_errors
+    ae_windows["is_anomaly"]           = recon_errors > ae_threshold
+
+    # Merge anomaly flag back onto Full_df by nearest GPS position
+    # (since both DataFrames have lat/long per window)
+    from sklearn.neighbors import BallTree
+    ae_coords     = np.radians(ae_windows[["lat", "long"]].values)
+    full_coords   = np.radians(Full_df[["lat", "long"]].values)
+    tree          = BallTree(ae_coords, metric="haversine")
+    _, indices    = tree.query(full_coords, k=1)
+
+    Full_df["reconstruction_error"] = ae_windows["reconstruction_error"].values[indices.flatten()]
+    Full_df["hazard_prediction"]    = np.where(
+        ae_windows["is_anomaly"].values[indices.flatten()],
+        "Defect",   # generic label since the AE doesn't distinguish pothole vs speedbump
+        "None"
+    )
+    # Suppress defects on rough asphalt BEFORE smoothing
+    Full_df.loc[Full_df["surface_prediction"] == "Rough_asphalt", "hazard_prediction"] = "None"
+
 else:
     Full_df["hazard_prediction"] = "None"
 
@@ -204,7 +302,7 @@ def mark_stable_hazards(label_series, min_block=2):
     keep = [False] * len(labels)
     i = 0
     while i < len(labels):
-        if labels[i] in ("Pothole", "Speedbump"):
+        if labels[i] in ("Defect"):
             j = i
             while j + 1 < len(labels) and labels[j + 1] == labels[i]:
                 j += 1
@@ -223,6 +321,7 @@ Full_df["show_hazard_marker"] = (
 )
 
 Full_df["iso_color"] = Full_df["aw_smooth"].apply(iso_color)
+
 
  # ==========================================
  # Plotting
@@ -420,7 +519,7 @@ for i in range(len(Full_df)):
     if not line.get("show_hazard_marker", False):
         continue
 
-    if surface == "Pothole":
+    if surface == "Defect":
         folium.CircleMarker(
             location=[line["lat"], line["long"]],
             radius=6,
@@ -431,7 +530,7 @@ for i in range(len(Full_df)):
             weight=3,
             popup=(f"""
                     <table>
-                    <tr><td colspan="2"><b><u>POTHOLE DETECTED</u></b></td></tr>
+                    <tr><td colspan="2"><b><u>DEFECT DETECTED</u></b></td></tr>
                     
                     <tr>
                         <td><u>aw:</u></td>
@@ -457,43 +556,6 @@ for i in range(len(Full_df)):
             )
         ).add_to(complete_map)
     
-    elif surface == "Speedbump":
-        folium.CircleMarker(
-            location=[line["lat"], line["long"]],
-            radius=6,
-            color="darkviolet",
-            fill=True,
-            fill_color="violet",
-            fill_opacity=0.9,
-            weight=3,
-            popup=(f"""
-                    <table>
-                    <tr><td colspan="2"><b><u>SPEEDBUMP DETECTED</u></b></td></tr>
-                    
-                    <tr>
-                        <td><u>aw:</u></td>
-                        <td>{line['aw_smooth']:.3f} m/s²</td>
-                    </tr>
-                    
-                    <tr>
-                        <td><u>Velocity:</u></td>
-                        <td>{line['v']:.1f} m/s</td>
-                    </tr>
-                    
-                    <tr>
-                        <td><u>Latitude:</u></td>
-                        <td>{line['lat']:.6f}</td>
-                    </tr>
-                    
-                    <tr>
-                        <td><u>Longitude:</u></td>
-                        <td>{line['long']:.6f}</td>
-                    </tr>
-                    </table>
-                    """
-            )
-        ).add_to(complete_map)
-
 # ==========================================
 # CUSTOM ISO LEGEND
 # ==========================================
@@ -631,19 +693,7 @@ float:left;
 margin-right:8px;
 opacity:0.9;"></i>
 
-Pothole<br><br>
-
-<i style="
-background:violet;
-border: 2px solid darkviolet;
-width:14px;
-height:14px;
-border-radius: 50%;
-float:left;
-margin-right:8px;
-opacity:0.9;"></i>
-
-Speedbump
+Defect<br><br>
 
 </div>
 
