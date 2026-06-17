@@ -7,42 +7,41 @@ from pathlib import Path
 import folium
 import joblib
 
-BASE_DIR = Path(__file__).resolve().parent
-MEASUREMENTS_DIR = BASE_DIR / "Measurements"
-TEST_CIRCUIT_DIR = BASE_DIR / "Test circuit"
-MODEL_FILE = BASE_DIR / "Road_Surface_Classifier.pkl"
-HAZARD_MODEL_FILE = BASE_DIR / "Road_Hazard_Classifier.pkl"
-OUTPUT_MAP_FILE = BASE_DIR / "Rugosity_Map_Milan_CL.html"
-TEST_6_FILE = BASE_DIR / "Test_6.py"
-DATA_SOURCE = "test_circuit"
-ENABLE_HAZARD_DETECTION = False
-COMFORT_SMOOTHING_WINDOW = 3
-SURFACE_SMOOTHING_WINDOW = 5
-HAZARD_SMOOTHING_WINDOW = 3
-SURFACE_COLORS = {
+Base_Dir = Path(__file__).resolve().parent
+Measurements_Dir = Base_Dir / "Measurements"
+Test_Circuit_Dir = Base_Dir / "Test circuit"
+Model_File = Base_Dir / "Road_Surface_Classifier.pkl"
+Hazard_Model_File = Base_Dir / "Road_Hazard_Classifier.pkl"
+Output_Map_File = Base_Dir / "Rugosity_Map_Milan_CL.html"
+Test_6_File = Base_Dir / "Test_6.py"
+Data_Source = "test_circuit"
+Enable_Hazard_Detection = False
+Comfort_Smoothing_Window = 3
+Surface_Smoothing_Window = 5
+Hazard_Smoothing_Window = 3
+Surface_Colors = {
     "Smooth_asphalt": "#2ca02c",
     "Medium_asphalt": "#ffbf00",
-    "Medium_rough_asphalt": "#ffbf00",
     "Rough_asphalt": "#d62728",
     "cobble": "#9467bd",
     "Unpaved": "#8c564b",
     "Grass": "#17becf",
 }
-DEFAULT_SURFACE_COLOR = "#6c757d"
+Default_Surface_Color = "#6c757d"
 
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
+if str(Base_Dir) not in sys.path:
+    sys.path.insert(0, str(Base_Dir))
 
 
 def load_test6_functions():
     """Load helpers from Test_6.py without running its plotting script."""
-    source = TEST_6_FILE.read_text(encoding="utf-8")
+    source = Test_6_File.read_text(encoding="utf-8")
     source = source.replace(
         "segment_times.append(Accel_z.index[k])",
         "center_index = k + window_size // 2\n        "
         "segment_times.append(Accel_z.index[center_index])",
     )
-    tree = ast.parse(source, filename=str(TEST_6_FILE))
+    tree = ast.parse(source, filename=str(Test_6_File))
     reusable_nodes = [
         node
         for node in tree.body
@@ -51,8 +50,8 @@ def load_test6_functions():
     module = ast.Module(body=reusable_nodes, type_ignores=[])
     ast.fix_missing_locations(module)
 
-    namespace = {"__file__": str(TEST_6_FILE)}
-    exec(compile(module, str(TEST_6_FILE), "exec"), namespace)
+    namespace = {"__file__": str(Test_6_File)}
+    exec(compile(module, str(Test_6_File), "exec"), namespace)
     return namespace["build_prediction_dataset"], namespace["iso_color"]
 
 
@@ -63,7 +62,7 @@ def surface_image_html(surface):
     if surface in ("Pothole", "Speedbump"):
         return ''
 
-    image_dir = BASE_DIR / "images"
+    image_dir = Base_Dir / "images"
     if not image_dir.is_dir():
         return ''
 
@@ -88,7 +87,7 @@ def surface_image_html(surface):
 
 
 def surface_color(surface):
-    return SURFACE_COLORS.get(surface, DEFAULT_SURFACE_COLOR)
+    return Surface_Colors.get(surface, Default_Surface_Color)
 
 
 def comfort_class(color):
@@ -108,8 +107,8 @@ def comfort_class(color):
 def build_graph_input(data_source):
     if data_source == "test_circuit":
         single_run_df = build_prediction_dataset(
-            TEST_CIRCUIT_DIR / "Accelerometer.csv",
-            TEST_CIRCUIT_DIR / "Location.csv",
+            Test_Circuit_Dir / "Accelerometer.csv",
+            Test_Circuit_Dir / "Location.csv",
         )
         single_run_df["run_id"] = 1
         return single_run_df
@@ -117,8 +116,8 @@ def build_graph_input(data_source):
     if data_source == "measurements":
         full_df = pd.DataFrame({})
         for i in range(1, 8):
-            accel_file = MEASUREMENTS_DIR / f"Accelerometer_{i}.csv"
-            gps_file = MEASUREMENTS_DIR / f"Location_{i}.csv"
+            accel_file = Measurements_Dir / f"Accelerometer_{i}.csv"
+            gps_file = Measurements_Dir / f"Location_{i}.csv"
             single_run_df = build_prediction_dataset(accel_file, gps_file)
             single_run_df["run_id"] = i
             full_df = pd.concat([full_df, single_run_df])
@@ -129,7 +128,7 @@ def build_graph_input(data_source):
     )
 
 
-Full_df = build_graph_input(DATA_SOURCE)
+Full_df = build_graph_input(Data_Source)
 
 Full_df = Full_df.sort_values(["run_id", "t"]).reset_index(drop=True)
 
@@ -149,14 +148,14 @@ feature_columns = [
 
 X = Full_df[feature_columns]
 
-classifier = joblib.load(MODEL_FILE)
+classifier = joblib.load(Model_File)
 
 surface_predictions = classifier.predict(X)
 
 Full_df["surface_prediction"] = surface_predictions
 
-if ENABLE_HAZARD_DETECTION:
-    hazard_classifier = joblib.load(HAZARD_MODEL_FILE)
+if Enable_Hazard_Detection:
+    hazard_classifier = joblib.load(Hazard_Model_File)
     Full_df["hazard_prediction"] = hazard_classifier.predict(X)
 else:
     Full_df["hazard_prediction"] = "None"
@@ -164,7 +163,7 @@ else:
 # Smooth the ISO comfort score and the surface label to reduce second-to-second noise.
 Full_df["aw_smooth"] = Full_df.groupby("run_id")["aw"].transform(
     lambda s: s.rolling(
-        window=COMFORT_SMOOTHING_WINDOW,
+        window=Comfort_Smoothing_Window,
         center=True,
         min_periods=1,
     ).mean()
@@ -184,13 +183,13 @@ def smooth_labels(label_series, window=3):
 
 Full_df["surface_prediction_smoothed"] = (
     Full_df.groupby("run_id")["surface_prediction"]
-           .apply(lambda s: smooth_labels(s, window=SURFACE_SMOOTHING_WINDOW))
+           .apply(lambda s: smooth_labels(s, window=Surface_Smoothing_Window))
            .reset_index(level=0, drop=True)
 )
 
 Full_df["hazard_prediction_smoothed"] = (
     Full_df.groupby("run_id")["hazard_prediction"]
-           .apply(lambda s: smooth_labels(s, window=HAZARD_SMOOTHING_WINDOW))
+           .apply(lambda s: smooth_labels(s, window=Hazard_Smoothing_Window))
            .reset_index(level=0, drop=True)
 )
 
@@ -736,5 +735,5 @@ complete_map.get_root().script.add_child(
 # ==========================================
 
 complete_map.save(
-    OUTPUT_MAP_FILE
+    Output_Map_File
 )
