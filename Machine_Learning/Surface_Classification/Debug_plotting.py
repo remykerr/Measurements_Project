@@ -8,17 +8,23 @@ Parameters:
 - plot_debug: if True, plots gravity correction, DFT and PSD
 """
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from pathlib import Path
+
 try:
     from .Dataset_construction import build_surface_dataset
 except ImportError:
     from Dataset_construction import build_surface_dataset
 
 
-DEBUG_SURFACE = "Unpaved"
-DEBUG_MEASUREMENT = 6
-DEBUG_WINDOW_INDEX = 2
+DEBUG_SURFACE = "Cobble"
+DEBUG_MEASUREMENT = 1
+DEBUG_WINDOW_INDEX =10
 
 train_df, test_df, debug_data = build_surface_dataset(
+    surface_types=(DEBUG_SURFACE,),
     plot_debug=True,
     return_debug=True,
     plot_debug_acc = True,
@@ -28,6 +34,9 @@ train_df, test_df, debug_data = build_surface_dataset(
 )
 
 debug_key = f"{DEBUG_SURFACE}_{DEBUG_MEASUREMENT}"
+if debug_key not in debug_data:
+    raise KeyError(f"{debug_key} not found. Available debug keys: {list(debug_data.keys())}")
+
 d = debug_data[debug_key]
 
 print("Sampling frequency:", d["sampling_frequency"])
@@ -48,3 +57,15 @@ after_filter = d["merged_after_speed_filter"]
 
 print("Rows before speed filter:", len(before_filter))
 print("Rows after speed filter:", len(after_filter))
+
+OUTPUT_DIR = Path(__file__).resolve().parent / "debug_results"
+OUTPUT_DIR.mkdir(exist_ok=True)
+for figure_number in plt.get_fignums():
+    figure = plt.figure(figure_number)
+    figure.savefig(
+        OUTPUT_DIR / f"{debug_key}_debug_plot_{figure_number}.png",
+        dpi=150,
+        bbox_inches="tight",
+    )
+
+print(f"Debug plots saved to: {OUTPUT_DIR}")

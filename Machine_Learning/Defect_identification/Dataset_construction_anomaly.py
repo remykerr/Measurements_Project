@@ -85,10 +85,11 @@ def normalize_debug_window_indices(debug_window_index, n_windows):
             safe_indices.append(safe_index)
     return safe_indices
 
+# function to obtain the anomaly dataset
 
-def build_surface_dataset(
+def build_surface_dataset_anomaly(
     base_dir=BASE_DIR,
-    surface_types=("Smooth_asphalt", "Rough_asphalt"),
+    surface_types=("Speedbump", "Pothole"),
     measurement_ids=None,
     fsamp=None,
     target_window_size=100,

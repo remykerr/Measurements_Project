@@ -142,7 +142,7 @@ def build_surface_dataset(
             
             
             if plot_debug_acc is True and collect_debug:
-                plt.figure()
+                plt.figure(figsize=(10, 4))
                 plt.plot(Accel_data["Time (s)"], Accel_data["Z (m/s^2)"], label='Vertical Acceleration (g_included)')
                 plt.xlabel('Time [s]')
                 plt.ylabel('Acc [m/s^2]')
@@ -178,7 +178,7 @@ def build_surface_dataset(
         
             
             if plot_debug and collect_debug:
-                plt.figure()
+                plt.figure(figsize=(10, 4))
 
                 plt.plot(
                     Accel_data["Time (s)"],
@@ -199,7 +199,7 @@ def build_surface_dataset(
                 plt.grid(True)
                 plt.show()
                 
-                plt.figure()
+                plt.figure(figsize=(10, 4))
                 plt.plot(Accel_data["Time (s)"], True_z_accel_data, label='Vertical Acceleration (g removed + high-pass)')
                 plt.xlabel('Time [s]')
                 plt.ylabel('Acc [m/s^2]')
@@ -305,7 +305,7 @@ def build_surface_dataset(
                 }
 
                 if plot_debug:
-                    plt.figure()
+                    plt.figure(figsize=(10, 4))
                     plt.plot(freq, np.abs(dft[debug_window_index_safe]))
                     plt.xlabel("Frequency [Hz]")
                     plt.ylabel("DFT amplitude")
@@ -313,7 +313,7 @@ def build_surface_dataset(
                     plt.grid(True)
                     plt.show()
 
-                    plt.figure()
+                    plt.figure(figsize=(10, 4))
                     plt.plot(freq, psd[debug_window_index_safe])
                     plt.xlabel("Frequency [Hz]")
                     plt.ylabel("PSD [m^2/s^4/Hz]")
