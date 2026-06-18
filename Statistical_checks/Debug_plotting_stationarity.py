@@ -9,6 +9,9 @@ included in the summary plots and the first one is used for detailed plots.
 
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -27,8 +30,8 @@ FEATURES_TO_PLOT = ["az_avg", "az_rms", "az_std", "spec_energy"]
 MEAN_DEV_THRESHOLD = 2.0
 ACF_ERROR_THRESHOLD = 1.0
 
-SAVE_FIGURES = False
-SHOW_FIGURES = True
+SAVE_FIGURES = True
+SHOW_FIGURES = False
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "debug_stationarity_plots"
 

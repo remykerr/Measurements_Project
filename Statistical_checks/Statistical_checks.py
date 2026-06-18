@@ -1,56 +1,83 @@
-""""
-This script extract the final dataset containing all thes statistical features comouted over 1s windows:
-
-1. Checking the stationary of the data
-2. Checking the ergodicity of the data
-3. Verify coherence between the different measurements of the same surface
-
-
 """
+Compute stationarity-style statistical checks on 1 s surface windows.
+
+The script builds the full window-level dataset, checks each measurement inside
+its own surface class, prints a compact summary, and writes the summary to CSV.
+"""
+
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 from Dataset_construction_statisticalChecks import build_surface_dataset_2
 
-# importing the dataset with all the features computed on 1s windows
-full_window_dataset = build_surface_dataset_2()
 
-print("Dataset shape:", full_window_dataset.shape)
-print("Dataset columns:", full_window_dataset.columns)
+FEATURES_TO_CHECK = ("az_avg", "az_std", "az_rms", "spec_energy")
+MEAN_DEV_THRESHOLD = 2.0
+ACF_ERROR_THRESHOLD = 1.0
+OUTPUT_CSV = Path(__file__).resolve().parent / "stationarity_summary.csv"
 
 
-# Stationarity Check: 
+def normalized_deviation(values):
+    values = pd.Series(values, dtype="float64")
+    sigma = values.std()
 
-percentage_stable_full = [] # list to store the percentage of stable windows for each measurement
-percentage_acf_stable_full = [] # list to store the percentage of ACF-stable windows for each measurement
+    if sigma == 0 or np.isnan(sigma):
+        return pd.Series(np.zeros(len(values)), index=values.index)
 
-for surface in full_window_dataset["srf"].unique():
-    for measurement_id in full_window_dataset["measurement_id"].unique():
-        
-        print(f"Surface: {surface}, Measurement ID: {measurement_id}")
-        df = full_window_dataset[
-            (full_window_dataset["srf"] == surface) &
-            (full_window_dataset["measurement_id"] == measurement_id)
-        ].copy()
+    return (values - values.mean()).abs() / sigma
 
-        df = df.sort_values("t")
 
-        features = ["az_avg"]#, "az_std", "az_rms", "spec_energy"]
+def summarize_measurement(surface, measurement_id, measurement_df):
+    measurement_df = measurement_df.sort_values("t")
+    summary = {
+        "surface": surface,
+        "measurement_id": measurement_id,
+        "n_windows": len(measurement_df),
+        "acf_stable_percentage": (
+            measurement_df["acf_error"] < ACF_ERROR_THRESHOLD
+        ).mean() * 100,
+        "acf_error_mean": measurement_df["acf_error"].mean(),
+    }
 
-        for feature in features:
-            mu = df[feature].mean() # mean of the feature over the whole measurement
-            sigma = df[feature].std() # standard deviation of the feature over the whole measurement
-            
-            
-            df["az_avg_dev"] = abs(df["az_avg"] - df["az_avg"].mean()) / df["az_avg"].std() # Deviation of mu_i from the global mean, normalized by the global std
-            percentage_stable = (df["az_avg_dev"] < 2).mean() * 100  # to be better defined
-            percentage_stable_full.append(percentage_stable)
-            
-            acf_stable_percentage = df["acf_stationary"].mean() * 100
-            print("ACF stable windows [%]:", acf_stable_percentage)
-            percentage_acf_stable_full.append(acf_stable_percentage)
+    for feature in FEATURES_TO_CHECK:
+        deviation = normalized_deviation(measurement_df[feature])
+        summary[f"{feature}_mean"] = measurement_df[feature].mean()
+        summary[f"{feature}_std"] = measurement_df[feature].std()
+        summary[f"{feature}_mean_deviation"] = deviation.mean()
+        summary[f"{feature}_stable_percentage"] = (
+            deviation < MEAN_DEV_THRESHOLD
+        ).mean() * 100
 
-            print("Feature:", feature)
-            print("mean:", mu)
-            print("std:", sigma)
-            print("Deviation of mu_i from global mean (normalized):", df["az_avg_dev"].mean()) # Average deviation of the feature mean in each window from the global mean, normalized by the global std
-            print("Stable windows [%]:", percentage_stable)
-            
+    return summary
+
+
+def build_stationarity_summary(full_window_dataset):
+    rows = []
+
+    grouped = full_window_dataset.groupby(["srf", "measurement_id"], sort=True)
+    for (surface, measurement_id), measurement_df in grouped:
+        if measurement_df.empty:
+            continue
+        rows.append(summarize_measurement(surface, measurement_id, measurement_df))
+
+    return pd.DataFrame(rows)
+
+
+def main():
+    full_window_dataset = build_surface_dataset_2()
+
+    print("Dataset shape:", full_window_dataset.shape)
+    print("Dataset columns:", list(full_window_dataset.columns))
+
+    summary = build_stationarity_summary(full_window_dataset)
+    summary.to_csv(OUTPUT_CSV, index=False)
+
+    print("\nStationarity summary:")
+    print(summary.to_string(index=False))
+    print(f"\nSummary saved to: {OUTPUT_CSV}")
+
+
+if __name__ == "__main__":
+    main()

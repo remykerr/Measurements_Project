@@ -25,130 +25,131 @@ except ImportError:
     from ML_utils import evaluate_model
 
 
-OUTPUT_DIR = Path(__file__).resolve().parent / "model_results_KNN_datasense"
+OUTPUT_DIR = Path(__file__).resolve().parent / "model_results_3Classes"
+OUTPUT_DIR.mkdir(exist_ok=True)
 
     
-results = []
+#results = []
 
-for i in range(1, 8):
+#for i in range(1, 8):
 
-    train_df, test_df, _ = build_surface_dataset(test_measurements=(i,)) 
+train_df, test_df, _ = build_surface_dataset(test_measurements=(5,)) 
 
-    # sanity check of dimensions
-    print("train_df shape:", train_df.shape)
-    print("test_df shape:", test_df.shape)
+# sanity check of dimensions
+print("train_df shape:", train_df.shape)
+print("test_df shape:", test_df.shape)
 
-    # ==================================
-    # FEATURES / LABELS
-    # ==================================
-    X_train = train_df.drop(columns=["srf"])
-    Y_train = train_df["srf"]
+# ==================================
+# FEATURES / LABELS
+# ==================================
+X_train = train_df.drop(columns=["srf"])
+Y_train = train_df["srf"]
 
-    X_test = test_df.drop(columns=["srf"])
-    Y_test = test_df["srf"]
+X_test = test_df.drop(columns=["srf"])
+Y_test = test_df["srf"]
 
-    # ==================================
-    # SCALING INPUT FEATURES
-    # ==================================
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+# ==================================
+# SCALING INPUT FEATURES
+# ==================================
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
 
-    # ==================================
-    # MODELS TRAINING AND EVALUATION
-    # ==================================
-    # evaluate_model(
-    #     svm.SVC(kernel="rbf", class_weight="balanced"),
-    #     X_train_scaled,
-    #     Y_train,
-    #     X_test_scaled,
-    #     Y_test,
-    #     "SVM Classifier",
-    #     test_id=i
-    # )
-    
-    
-    _, _, f1, accuracy, recall, precision = evaluate_model(
-        neighbors.KNeighborsClassifier(n_neighbors=5, weights="uniform"),
-        X_train_scaled,
-        Y_train,
-        X_test_scaled,
-        Y_test,
-        "KNN Classifier",
-        test_id=i
-    )
-    
-     
-    results.append({
-    "test_id": i,
-    "model_name": "KNN Classifier",
-    "f1_score": f1,
-    "accuracy": accuracy,
-    "recall": recall,
-    "precision": precision,
-    })
-
-    # evaluate_model(
-    #     RandomForestClassifier(
-    #     n_estimators=300,
-    #     max_depth=4,
-    #     min_samples_leaf=10,
-    #     min_samples_split=20,
-    #     class_weight="balanced",
-    #     random_state=42,
-    #     ),
-    #     X_train_scaled,
-    #     Y_train,
-    #     X_test_scaled,
-    #     Y_test,
-    #     "Random Forest Classifier",
+# ==================================
+# MODELS TRAINING AND EVALUATION
+# ==================================
+evaluate_model(
+svm.SVC(kernel="rbf", class_weight="balanced"),
+X_train_scaled,
+Y_train,
+X_test_scaled,
+Y_test,
+"SVM Classifier",
+test_id=5
+)
 
 
-    # evaluate_model(
-    #     HistGradientBoostingClassifier(
-    #     max_iter=100,
-    #     learning_rate=0.03,
-    #     max_leaf_nodes=8,
-    #     min_samples_leaf=20,
-    #     l2_regularization=1.0,
-    #     random_state=42,
-    #     ),
-    #     X_train_scaled,
-    #     Y_train,
-    #     X_test_scaled,
-    #     Y_test,
-    #     "HistGradientBoostingClassifier",
-    # )
+_, _, f1, accuracy, recall, precision = evaluate_model(
+neighbors.KNeighborsClassifier(n_neighbors=5, weights="uniform"),
+X_train_scaled,
+Y_train,
+X_test_scaled,
+Y_test,
+"KNN Classifier",
+test_id=5
+)
+
+
+# results.append({
+# "test_id": i,
+# "model_name": "KNN Classifier",
+# "f1_score": f1,
+# "accuracy": accuracy,
+# "recall": recall,
+# "precision": precision,
+# })
+
+# evaluate_model(
+#     RandomForestClassifier(
+#     n_estimators=300,
+#     max_depth=4,
+#     min_samples_leaf=10,
+#     min_samples_split=20,
+#     class_weight="balanced",
+#     random_state=42,
+#     ),
+#     X_train_scaled,
+#     Y_train,
+#     X_test_scaled,
+#     Y_test,
+#     "Random Forest Classifier",
+
+
+# evaluate_model(
+#     HistGradientBoostingClassifier(
+#     max_iter=100,
+#     learning_rate=0.03,
+#     max_leaf_nodes=8,
+#     min_samples_leaf=20,
+#     l2_regularization=1.0,
+#     random_state=42,
+#     ),
+#     X_train_scaled,
+#     Y_train,
+#     X_test_scaled,
+#     Y_test,
+#     "HistGradientBoostingClassifier",
+# )
 
 # save the final KNN Model
 
-  
+
 
 # final statistics for Training data sensibility analysis
-results_df = pd.DataFrame(results)
+#results_df = pd.DataFrame(results)
 
-print(f"Average F1-score across all test_ids: {results_df['f1_score'].mean():.3f}")
-print(f"Standard deviation of F1-scores across all test_ids: {results_df['f1_score'].std():.3f}")
+# print(f"Average F1-score across all test_ids: {results_df['f1_score'].mean():.3f}")
+# print(f"Standard deviation of F1-scores across all test_ids: {results_df['f1_score'].std():.3f}")
 
-print(f"Average Accuracy across all test_ids: {results_df['accuracy'].mean():.3f}")
-print(f"Standard deviation of Accuracy across all test_ids: {results_df['accuracy'].std():.3f}")
+# print(f"Average Accuracy across all test_ids: {results_df['accuracy'].mean():.3f}")
+# print(f"Standard deviation of Accuracy across all test_ids: {results_df['accuracy'].std():.3f}")
 
-print(f"Average Recall across all test_ids: {results_df['recall'].mean():.3f}")
-print(f"Standard deviation of Recall across all test_ids: {results_df['recall'].std():.3f}")
+# print(f"Average Recall across all test_ids: {results_df['recall'].mean():.3f}")
+# print(f"Standard deviation of Recall across all test_ids: {results_df['recall'].std():.3f}")
 
-print(f"Average Precision across all test_ids: {results_df['precision'].mean():.3f}")
-print(f"Standard deviation of Precision across all test_ids: {results_df['precision'].std():.3f}")
+# print(f"Average Precision across all test_ids: {results_df['precision'].mean():.3f}")
+# print(f"Standard deviation of Precision across all test_ids: {results_df['precision'].std():.3f}")
 
-# export csv with results
-OUTPUT_DIR.mkdir(exist_ok=True)
-results_df.to_csv(OUTPUT_DIR / "model_results_KNN.csv", index=False)
+# # export csv with results
+# OUTPUT_DIR.mkdir(exist_ok=True)
+# results_df.to_csv(OUTPUT_DIR / "model_results_KNN.csv", index=False)
 
 for figure_number in plt.get_fignums():
     figure = plt.figure(figure_number)
     figure.savefig(
-        OUTPUT_DIR / f"confusion_matrix_{figure_number}.png",
-        dpi=150,
-        bbox_inches="tight",
+    OUTPUT_DIR / f"confusion_matrix_{figure_number}.png",
+    dpi=150,
+    bbox_inches="tight",
     )
 
 print(f"\nResults saved to: {OUTPUT_DIR}")

@@ -10,10 +10,10 @@ import sys
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 MACHINE_LEARNING_DIR = PROJECT_DIR / "Machine_Learning"
-if str(MACHINE_LEARNING_DIR) not in sys.path:
-    sys.path.insert(0, str(MACHINE_LEARNING_DIR))
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
 
-from gravity_correction import correct_gravity
+from Machine_Learning.Surface_Classification.gravity_correction import correct_gravity
 
 BASE_DIR = MACHINE_LEARNING_DIR
 DEBUG_OUTPUT_KEYS = (
