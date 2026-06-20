@@ -20,7 +20,7 @@ from gravity_correction import correct_gravity
 Base_Dir = Path(__file__).resolve().parent
 Measurements_Dir = Base_Dir / "Measurements"
 Test_Circuit_Dir = Base_Dir / "Test circuit"
-Model_File = Base_Dir / "knn_surface_classifier.joblib"
+Model_File = Base_Dir / "knn_surface_classifie_3classes.joblib"
 AE_Model_File    = Base_Dir / "autoencoder_model.keras"
 AE_Scaler_File   = Base_Dir / "ae_scaler.joblib"
 AE_Threshold_File = Base_Dir / "ae_threshold.joblib"
@@ -258,7 +258,7 @@ if Enable_Hazard_Detection:
         "None"
     )
     # Suppress defects on rough asphalt BEFORE smoothing
-    Full_df.loc[Full_df["surface_prediction"] == "Rough_asphalt", "hazard_prediction"] = "None"
+    Full_df.loc[Full_df["surface_prediction"] != "Smooth_asphalt", "hazard_prediction"] = "None"
 
 else:
     Full_df["hazard_prediction"] = "None"
