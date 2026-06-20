@@ -45,7 +45,7 @@ X_scaled = scaler.fit_transform(X)
 model = neighbors.KNeighborsClassifier(n_neighbors=5, weights="uniform")
 model.fit(X_scaled, y)
 
-joblib.dump(model, OUTPUT_DIR / "knn_surface_classifier.joblib")
+joblib.dump(model, OUTPUT_DIR / "knn_surface_classifie_3classes.joblib")
 joblib.dump(scaler, OUTPUT_DIR / "surface_scaler.joblib")
 joblib.dump(list(X.columns), OUTPUT_DIR / "feature_columns.joblib")
 
