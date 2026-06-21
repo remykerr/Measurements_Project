@@ -65,7 +65,7 @@ all_classes = True # true if you want to use all classes, False if you want to u
 surface_types = ("Rough_asphalt", "Smooth_asphalt", "Medium_asphalt")  # default surface types
 
 if all_classes:
-    surface_types = ("Rough_asphalt", "Smooth_asphalt", "cobble", "Grass")
+    surface_types = ("Rough_asphalt", "Smooth_asphalt", "cobble", "Grass", "Medium_asphalt")
 
 
 def build_surface_dataset(
