@@ -25,7 +25,7 @@ except ImportError:
     from ML_utils import evaluate_model
 
 
-OUTPUT_DIR = Path(__file__).resolve().parent / "model_results_3Classes"
+OUTPUT_DIR = Path(__file__).resolve().parent / "model_results_KNN_SVM_noMediumnoUnpaved"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
     

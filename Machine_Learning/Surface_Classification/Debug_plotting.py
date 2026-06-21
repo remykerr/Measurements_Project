@@ -19,8 +19,8 @@ except ImportError:
     from Dataset_construction import build_surface_dataset
 
 
-DEBUG_SURFACE = "Smooth_asphalt"
-DEBUG_MEASUREMENT = 1
+DEBUG_SURFACE = "Grass"
+DEBUG_MEASUREMENT = 8
 DEBUG_WINDOW_INDEX =10
 
 train_df, test_df, debug_data = build_surface_dataset(
